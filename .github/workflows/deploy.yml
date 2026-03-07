@@ -1,0 +1,32 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Execution name'
+        required: false
+        default: 'Manual Deploy'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute on Runner Agent
+        run: |
+          curl -sf -X POST http://192.168.50.190:8090/execute \
+            -H "Authorization: Bearer 1234" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "${{ github.event.inputs.name || format('Deploy {0} @ {1}', github.repository, github.sha) }}",
+              "steps": [
+                {
+                  "name": "Echo Info",
+                  "run": "echo Deploying ${{ github.repository }} commit ${{ github.sha }}"
+                },
+                {
+                  "name": "Show Date",
+                  "run": "date"
+                }
+              ]
+            }'

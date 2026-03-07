@@ -51,14 +51,6 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME  }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v6
-      with:
-        context: ./ui
-        file: ./ui/Dockerfile
-        push: true
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/runner-agent:latest
-
     - name: Create GitHub Release
       run: |
         gh release create build-${{ github.run_number }} \
@@ -67,6 +59,15 @@ jobs:
           --prerelease
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: ./ui
+        file: ./ui/Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/runner-agent:latest
+
 
 
 
