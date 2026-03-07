@@ -1,0 +1,101 @@
+# === Gradle (Backend) ===
+HELP.md
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# === Spring/Java IDEs ===
+# STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+
+# === Next.js (Frontend) ===
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/.env*.local
+ui/.vercel
+ui/*.tsbuildinfo
+ui/next-env.d.ts
+
+# === Databases ===
+# H2 (Backend)
+*.mv.db
+*.trace.db
+agent-data.*
+
+# SQLite (Frontend)
+ui/data/*.db
+ui/data/*.db-journal
+ui/data/*.db-wal
+ui/data/*.db-shm
+!ui/data/.gitkeep
+
+# === Logs ===
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === OS Files ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Runtime/Temp ===
+*.pid
+*.seed
+*.pid.lock
+*.swp
+*.swo
+*~
+.cache/
+tmp/
+temp/
+
+# === Environment/Secrets ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
+# === Downloads (JAR files for distribution) ===
+ui/downloads/*.jar
+!ui/downloads/.gitkeep
+*.jar
