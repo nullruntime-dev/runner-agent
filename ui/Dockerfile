@@ -22,16 +22,16 @@ ENV NODE_ENV=production
 # Install sqlite3 for database initialization
 RUN apk add --no-cache sqlite
 
-# Copy built app
+# Copy built app (standalone includes node_modules it needs)
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy Prisma client and adapter
+# Copy Prisma-related modules (not included in standalone)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/node_modules/@prisma/adapter-libsql ./node_modules/@prisma/adapter-libsql
-COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
+COPY --from=builder /app/node_modules/@libsql/client ./node_modules/@libsql/client
 
 # Copy migration files
 COPY --from=builder /app/prisma/migrations ./prisma/migrations
