@@ -4,6 +4,7 @@ import { getAgent, syncExecutionDetails } from '@/lib/agents';
 import { Execution } from '@/lib/api';
 import prisma from '@/lib/db';
 import ExecutionDetail from '@/components/ExecutionDetail';
+import { Step } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ async function getExecution(agentId: string, executionId: string): Promise<Execu
     createdAt: exec.createdAt.toISOString(),
     agentId: exec.agent.id,
     agentName: exec.agent.name,
-    steps: exec.steps.map((step) => ({
+    steps: exec.steps.map((step: Step) => ({
       id: step.id,
       stepIndex: step.stepIndex,
       name: step.name,
