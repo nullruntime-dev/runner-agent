@@ -8,10 +8,9 @@
 name: Java CI with Gradle
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -59,5 +58,15 @@ jobs:
         file: ./ui/Dockerfile
         push: true
         tags: ${{ secrets.DOCKER_HUB_USERNAME }}/runner-agent:latest
+
+    - name: Create GitHub Release
+      run: |
+        gh release create build-${{ github.run_number }} \
+          ./build/libs/*.jar \
+          --title "Build #${{ github.run_number }}" \
+          --prerelease
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 

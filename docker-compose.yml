@@ -5,3 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    volumes:
+      - runner-data:/app/data
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  runner-data:
