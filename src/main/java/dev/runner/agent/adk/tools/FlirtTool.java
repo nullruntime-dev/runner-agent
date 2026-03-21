@@ -280,43 +280,68 @@ public class FlirtTool {
         return result;
     }
 
-    @Schema(name = "get_crush_profile", description = "Get the stored profile for someone you're talking to.")
+    @Schema(name = "get_crush_profile", description = "Get the stored profile for someone you're talking to. Creates a new profile if one doesn't exist.")
     public Map<String, Object> getProfile(
-            @Schema(name = "their_name", description = "Name of the person (leave empty to get most recent)", optional = true) String theirName
+            @Schema(name = "their_name", description = "Name of the person (leave empty to get most recent)", optional = true) String theirName,
+            @Schema(name = "create_if_missing", description = "Create a new profile if one doesn't exist (default: true)", optional = true) Boolean createIfMissing
     ) {
-        log.info("ADK tool: get_crush_profile name='{}'", theirName);
+        log.info("ADK tool: get_crush_profile name='{}' createIfMissing={}", theirName, createIfMissing);
 
         Map<String, Object> result = new HashMap<>();
 
         String sessionId = getSessionId();
+        boolean shouldCreate = createIfMissing == null || createIfMissing;
 
-        Optional<CrushProfile> profileOpt;
+        CrushProfile profile;
         if (theirName != null && !theirName.isBlank()) {
-            profileOpt = crushProfileService.getProfile(sessionId, theirName);
+            Optional<CrushProfile> profileOpt = crushProfileService.getProfile(sessionId, theirName);
+            if (profileOpt.isEmpty()) {
+                if (shouldCreate) {
+                    // Auto-create profile for new person
+                    log.info("Creating new profile for: {}", theirName);
+                    profile = crushProfileService.getOrCreateProfile(sessionId, theirName);
+                    result.put("isNew", true);
+                    result.put("message", "Created a new profile for " + theirName + ". Share their messages so I can learn about them!");
+                } else {
+                    result.put("success", false);
+                    result.put("message", "No profile found for " + theirName + ". Share their messages with me to start tracking!");
+                    return result;
+                }
+            } else {
+                profile = profileOpt.get();
+                result.put("isNew", false);
+            }
         } else {
-            profileOpt = crushProfileService.getActiveProfile(sessionId);
+            Optional<CrushProfile> activeProfile = crushProfileService.getActiveProfile(sessionId);
+            if (activeProfile.isEmpty()) {
+                result.put("success", false);
+                result.put("message", "No profiles yet. Tell me someone's name and share their messages!");
+                return result;
+            }
+            profile = activeProfile.get();
+            result.put("isNew", false);
         }
 
-        if (profileOpt.isEmpty()) {
-            result.put("success", false);
-            result.put("message", "No profile found. Start by sharing their messages with me!");
-            return result;
-        }
-
-        CrushProfile profile = profileOpt.get();
+        String displayName = profile.getDisplayName() != null ? profile.getDisplayName() : profile.getName();
         result.put("success", true);
         result.put("profileContext", crushProfileService.buildProfileContext(profile));
-        result.put("profile", Map.of(
-                "name", profile.getName(),
-                "nickname", profile.getNickname() != null ? profile.getNickname() : "",
-                "platform", profile.getPlatform() != null ? profile.getPlatform() : "",
-                "relationshipStage", profile.getRelationshipStage() != null ? profile.getRelationshipStage() : "",
-                "interests", profile.getInterests() != null ? profile.getInterests() : "",
-                "personality", profile.getPersonality() != null ? profile.getPersonality() : "",
-                "communicationStyle", profile.getCommunicationStyle() != null ? profile.getCommunicationStyle() : "",
-                "knownFacts", profile.getKnownFacts() != null ? profile.getKnownFacts() : "",
-                "messageCount", profile.getMessageCount()
-        ));
+
+        // Build profile map (Map.of() only supports up to 10 entries)
+        Map<String, Object> profileData = new HashMap<>();
+        profileData.put("name", profile.getName());
+        profileData.put("displayName", displayName);
+        profileData.put("nickname", profile.getNickname() != null ? profile.getNickname() : "");
+        profileData.put("platform", profile.getPlatform() != null ? profile.getPlatform() : "");
+        profileData.put("relationshipStage", profile.getRelationshipStage() != null ? profile.getRelationshipStage() : "");
+        profileData.put("interests", profile.getInterests() != null ? profile.getInterests() : "");
+        profileData.put("personality", profile.getPersonality() != null ? profile.getPersonality() : "");
+        profileData.put("communicationStyle", profile.getCommunicationStyle() != null ? profile.getCommunicationStyle() : "");
+        profileData.put("knownFacts", profile.getKnownFacts() != null ? profile.getKnownFacts() : "");
+        profileData.put("recentMessages", profile.getRecentMessages() != null ? profile.getRecentMessages() : "");
+        profileData.put("messageCount", profile.getMessageCount());
+        profileData.put("createdAt", profile.getCreatedAt().toString());
+        profileData.put("lastUpdated", profile.getUpdatedAt().toString());
+        result.put("profile", profileData);
 
         return result;
     }
@@ -338,11 +363,12 @@ public class FlirtTool {
         }
 
         List<Map<String, Object>> profileList = profiles.stream().map(p -> Map.<String, Object>of(
-                "name", p.getName(),
+                "name", p.getDisplayName() != null ? p.getDisplayName() : p.getName(),
                 "platform", p.getPlatform() != null ? p.getPlatform() : "unknown",
                 "stage", p.getRelationshipStage() != null ? p.getRelationshipStage() : "unknown",
                 "messageCount", p.getMessageCount(),
-                "lastUpdated", p.getUpdatedAt().toString()
+                "lastUpdated", p.getUpdatedAt().toString(),
+                "hasMessages", p.getRecentMessages() != null && !p.getRecentMessages().isBlank()
         )).toList();
 
         result.put("success", true);

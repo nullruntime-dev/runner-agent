@@ -39,6 +39,9 @@ public class CrushProfile {
     @Column(nullable = false)
     private String name;
 
+    @Column
+    private String displayName;
+
     @Column(columnDefinition = "TEXT")
     private String nickname;
 

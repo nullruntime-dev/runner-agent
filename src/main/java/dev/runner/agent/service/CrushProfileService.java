@@ -36,20 +36,36 @@ public class CrushProfileService {
 
     @Transactional
     public CrushProfile getOrCreateProfile(String sessionId, String name) {
-        return crushProfileRepository.findBySessionIdAndName(sessionId, name.toLowerCase().trim())
+        String normalizedName = normalizeName(name);
+        return crushProfileRepository.findBySessionIdAndName(sessionId, normalizedName)
                 .orElseGet(() -> {
+                    log.info("Creating new crush profile: session={} name={} displayName={}",
+                            sessionId, normalizedName, name.trim());
                     CrushProfile profile = CrushProfile.builder()
                             .sessionId(sessionId)
-                            .name(name.toLowerCase().trim())
+                            .name(normalizedName)
+                            .displayName(name.trim())
                             .messageCount(0)
                             .build();
                     return crushProfileRepository.save(profile);
                 });
     }
 
+    /**
+     * Normalize name for consistent lookup - lowercase, trimmed, single spaces
+     */
+    private String normalizeName(String name) {
+        return name.toLowerCase().trim().replaceAll("\\s+", " ");
+    }
+
     @Transactional
     public CrushProfile addMessage(String sessionId, String name, String theirMessage) {
         CrushProfile profile = getOrCreateProfile(sessionId, name);
+
+        // Ensure display name is set (might be missing for old profiles)
+        if (profile.getDisplayName() == null || profile.getDisplayName().isBlank()) {
+            profile.setDisplayName(name.trim());
+        }
 
         // Append to recent messages (keep last N)
         String recentMessages = profile.getRecentMessages();
@@ -57,7 +73,10 @@ public class CrushProfileService {
             recentMessages = "";
         }
 
-        String newEntry = "- \"" + theirMessage.replace("\"", "'") + "\"\n";
+        // Add timestamp to message for context
+        String timestamp = java.time.LocalDateTime.now().format(
+                java.time.format.DateTimeFormatter.ofPattern("MM/dd HH:mm"));
+        String newEntry = "- [" + timestamp + "] \"" + theirMessage.replace("\"", "'") + "\"\n";
         recentMessages = recentMessages + newEntry;
 
         // Keep only last N messages
@@ -73,8 +92,8 @@ public class CrushProfileService {
         profile.setRecentMessages(recentMessages);
         profile.setMessageCount(profile.getMessageCount() + 1);
 
-        log.info("Added message to profile: session={} name={} totalMessages={}",
-                sessionId, name, profile.getMessageCount());
+        log.info("Added message to profile: session={} name={} displayName={} totalMessages={}",
+                sessionId, profile.getName(), profile.getDisplayName(), profile.getMessageCount());
 
         return crushProfileRepository.save(profile);
     }
@@ -123,7 +142,43 @@ public class CrushProfileService {
     }
 
     public Optional<CrushProfile> getProfile(String sessionId, String name) {
-        return crushProfileRepository.findBySessionIdAndName(sessionId, name.toLowerCase().trim());
+        String normalizedName = normalizeName(name);
+
+        // Try exact match first
+        Optional<CrushProfile> exact = crushProfileRepository.findBySessionIdAndName(sessionId, normalizedName);
+        if (exact.isPresent()) {
+            return exact;
+        }
+
+        // Try case-insensitive match
+        Optional<CrushProfile> caseInsensitive = crushProfileRepository.findBySessionIdAndNameIgnoreCase(sessionId, normalizedName);
+        if (caseInsensitive.isPresent()) {
+            return caseInsensitive;
+        }
+
+        // Try display name match
+        Optional<CrushProfile> displayNameMatch = crushProfileRepository.findBySessionIdAndDisplayNameIgnoreCase(sessionId, name.trim());
+        if (displayNameMatch.isPresent()) {
+            return displayNameMatch;
+        }
+
+        // Try partial match (first name only, or contains)
+        String firstName = normalizedName.split(" ")[0];
+        List<CrushProfile> partialMatches = crushProfileRepository.findBySessionIdAndNameContainingIgnoreCase(sessionId, firstName);
+        if (!partialMatches.isEmpty()) {
+            log.info("Found {} partial match(es) for '{}' using first name '{}'", partialMatches.size(), name, firstName);
+            return Optional.of(partialMatches.get(0));
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Get or create a profile - useful when we want to ensure a profile exists
+     */
+    public CrushProfile getOrCreateProfileForLookup(String sessionId, String name) {
+        return getProfile(sessionId, name)
+                .orElseGet(() -> getOrCreateProfile(sessionId, name));
     }
 
     public List<CrushProfile> getAllProfiles(String sessionId) {
@@ -142,18 +197,22 @@ public class CrushProfileService {
 
     public String buildProfileContext(CrushProfile profile) {
         StringBuilder context = new StringBuilder();
-        context.append("=== CRUSH PROFILE: ").append(profile.getName().toUpperCase()).append(" ===\n\n");
+        String displayName = profile.getDisplayName() != null ? profile.getDisplayName() : profile.getName();
+        context.append("=== CRUSH PROFILE: ").append(displayName.toUpperCase()).append(" ===\n\n");
 
-        if (profile.getNickname() != null) {
+        context.append("Name: ").append(displayName).append("\n");
+        if (profile.getNickname() != null && !profile.getNickname().isBlank()) {
             context.append("Nickname: ").append(profile.getNickname()).append("\n");
         }
-        if (profile.getPlatform() != null) {
+        if (profile.getPlatform() != null && !profile.getPlatform().isBlank()) {
             context.append("Platform: ").append(profile.getPlatform()).append("\n");
         }
-        if (profile.getRelationshipStage() != null) {
+        if (profile.getRelationshipStage() != null && !profile.getRelationshipStage().isBlank()) {
             context.append("Stage: ").append(profile.getRelationshipStage()).append("\n");
         }
-        context.append("Messages analyzed: ").append(profile.getMessageCount()).append("\n\n");
+        context.append("Messages analyzed: ").append(profile.getMessageCount()).append("\n");
+        context.append("First contact: ").append(profile.getCreatedAt()).append("\n");
+        context.append("Last interaction: ").append(profile.getUpdatedAt()).append("\n\n");
 
         if (profile.getInterests() != null && !profile.getInterests().isBlank()) {
             context.append("INTERESTS:\n").append(profile.getInterests()).append("\n\n");

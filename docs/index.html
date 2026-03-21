@@ -170,9 +170,13 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 14px;list
-      text-decoration: none;
+      gap: 14px;
+      text-decoration: none !important;
       color: var(--text-primary);
+    }
+
+    .logo * {
+      text-decoration: none !important;
     }
 
     .logo-placeholder {
@@ -214,6 +218,7 @@
       font-size: 20px;
       font-weight: 700;
       letter-spacing: -0.5px;
+      text-decoration: none;
     }
 
     .nav-links {
@@ -939,6 +944,114 @@
       color: var(--yellow);
     }
 
+    /* Requirements Box */
+    .requirements-box {
+      background: linear-gradient(135deg, rgba(0, 255, 242, 0.05), rgba(153, 0, 255, 0.05));
+      border: 1px solid var(--border-bright);
+      padding: 32px;
+      margin-bottom: 48px;
+      position: relative;
+    }
+
+    .requirements-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+    }
+
+    .requirements-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .requirements-header svg {
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+
+    .requirements-header h4 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .requirements-box > p {
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .requirements-box strong {
+      color: var(--cyan);
+    }
+
+    .requirements-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .requirement-item {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .requirement-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--magenta);
+    }
+
+    .requirement-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .requirement-desc a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    .requirement-desc a:hover {
+      text-decoration: underline;
+    }
+
+    .requirement-desc code {
+      background: var(--bg-primary);
+      padding: 2px 6px;
+      font-size: 11px;
+      color: var(--yellow);
+      border: 1px solid var(--border);
+    }
+
+    @media (max-width: 768px) {
+      .requirements-box {
+        padding: 24px;
+        margin-bottom: 32px;
+      }
+
+      .requirements-header h4 {
+        font-size: 16px;
+      }
+
+      .requirements-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     /* How it works */
     .how-it-works {
       padding: 140px 0;
@@ -1233,6 +1346,10 @@
       display: flex;
       align-items: center;
       gap: 12px;
+    }
+
+    .footer-logo > span {
+      text-decoration: none;
     }
 
     .footer-logo-img {
@@ -1943,7 +2060,7 @@
             <span class="stroke glitch" data-text="confidence">confidence</span>
           </h1>
           <p class="hero-subtitle">
-            The AI-powered deployment agent that executes commands, streams logs in real-time, and lets you build custom skills through natural language.
+            Powered by <strong style="color: var(--cyan);">Google Gemini</strong>. Execute commands, stream logs in real-time, and build custom skills through natural language.
           </p>
           <div class="hero-cta">
             <a href="#getting-started" class="btn btn-primary">
@@ -2239,22 +2356,49 @@
         <h2 class="section-title">Up and running in minutes</h2>
         <p class="section-subtitle">Follow these steps to deploy your own Griphook instance.</p>
       </div>
+
+      <!-- Requirements callout -->
+      <div class="requirements-box reveal">
+        <div class="requirements-header">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <h4>Powered by Google Gemini</h4>
+        </div>
+        <p>Griphook uses <strong>Google Gemini</strong> for AI chat capabilities. You'll need a free API key to enable AI features.</p>
+        <div class="requirements-grid">
+          <div class="requirement-item">
+            <span class="requirement-label">GOOGLE_AI_API_KEY</span>
+            <span class="requirement-desc">Get your free key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a></span>
+          </div>
+          <div class="requirement-item">
+            <span class="requirement-label">AGENT_TOKEN</span>
+            <span class="requirement-desc">Your secret token for API authentication (any string you choose)</span>
+          </div>
+          <div class="requirement-item">
+            <span class="requirement-label">AGENT_ADK_MODEL</span>
+            <span class="requirement-desc">Model to use: <code>gemini-2.0-flash</code>, <code>gemini-1.5-pro</code>, <code>gemini-1.5-flash</code></span>
+          </div>
+        </div>
+      </div>
+
       <div class="getting-started-content">
         <div class="getting-started-steps">
           <div class="gs-step reveal">
             <div class="gs-step-number">1</div>
             <div class="gs-step-content">
-              <h4>Clone the repository</h4>
-              <p>Get the source code from GitHub.</p>
-              <code>git clone https://github.com/nullruntime-dev/runner-agent.git<br>cd runner-agent</code>
+              <h4>Get your Gemini API Key</h4>
+              <p>Visit Google AI Studio to create your free API key.</p>
+              <code><a href="https://aistudio.google.com/apikey" target="_blank" style="color: var(--cyan);">https://aistudio.google.com/apikey</a></code>
             </div>
           </div>
           <div class="gs-step reveal reveal-delay-1">
             <div class="gs-step-number">2</div>
             <div class="gs-step-content">
               <h4>Configure environment</h4>
-              <p>Copy the example config and set your API keys.</p>
-              <code>cp .env.example .env<br># Edit .env: AGENT_TOKEN, GOOGLE_AI_API_KEY</code>
+              <p>Set your API key and auth token in the .env file.</p>
+              <code>GOOGLE_AI_API_KEY=your-gemini-key<br>AGENT_TOKEN=your-secret-token<br>AGENT_ADK_MODEL=gemini-2.0-flash</code>
             </div>
           </div>
           <div class="gs-step reveal reveal-delay-2">

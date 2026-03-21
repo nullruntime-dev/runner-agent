@@ -8,6 +8,68 @@ interface ChatMessageProps {
   isStreaming?: boolean;
 }
 
+// Function call badge component
+function FunctionCallBadge({ name, type }: { name: string; type: 'call' | 'response' }) {
+  const isCall = type === 'call';
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 my-1 text-xs font-medium rounded-sm ${
+        isCall
+          ? 'bg-[#9900ff]/10 text-[#c77dff] border border-[#9900ff]/30'
+          : 'bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30'
+      }`}
+    >
+      {isCall ? (
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+        </svg>
+      ) : (
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+      )}
+      <span className="font-mono">{name}</span>
+    </span>
+  );
+}
+
+// Parse function call markers from content
+function parseFunctionCalls(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  const elements: React.ReactNode[] = [];
+  const regex = /\[\[(FUNCTION_CALL|FUNCTION_RESPONSE):([^\]]+)\]\]/g;
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      const beforeText = text.slice(lastIndex, match.index);
+      if (beforeText.trim()) {
+        elements.push(<React.Fragment key={`text-${key++}`}>{beforeText}</React.Fragment>);
+      }
+    }
+
+    // Add function call badge
+    const type = match[1] === 'FUNCTION_CALL' ? 'call' : 'response';
+    const name = match[2];
+    elements.push(
+      <FunctionCallBadge key={`fn-${key++}`} name={name} type={type} />
+    );
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    elements.push(<React.Fragment key={`text-${key++}`}>{text.slice(lastIndex)}</React.Fragment>);
+  }
+
+  return elements.length > 0 ? elements : [<React.Fragment key="original">{text}</React.Fragment>];
+}
+
 // Simple markdown parser for code blocks, inline code, bold, and lists
 function parseMarkdown(text: string): React.ReactNode[] {
   // Handle empty or invalid input
@@ -158,6 +220,12 @@ export default function ChatMessage({ message, isStreaming }: ChatMessageProps) 
       return message.content || '';
     }
     const content = message.content || '';
+
+    // First check for function call markers
+    if (content.includes('[[FUNCTION_CALL:') || content.includes('[[FUNCTION_RESPONSE:')) {
+      return parseFunctionCalls(content);
+    }
+
     const parsed = parseMarkdown(content);
     // If parsing returned empty but we have content, show content as-is
     if (parsed.length === 0 && content.length > 0) {

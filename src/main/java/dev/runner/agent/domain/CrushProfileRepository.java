@@ -26,6 +26,15 @@ public interface CrushProfileRepository extends JpaRepository<CrushProfile, Long
 
     Optional<CrushProfile> findBySessionIdAndName(String sessionId, String name);
 
+    // Case-insensitive name lookup
+    Optional<CrushProfile> findBySessionIdAndNameIgnoreCase(String sessionId, String name);
+
+    // Partial name match (contains)
+    List<CrushProfile> findBySessionIdAndNameContainingIgnoreCase(String sessionId, String name);
+
+    // Search by display name
+    Optional<CrushProfile> findBySessionIdAndDisplayNameIgnoreCase(String sessionId, String displayName);
+
     List<CrushProfile> findBySessionIdOrderByUpdatedAtDesc(String sessionId);
 
     Optional<CrushProfile> findFirstBySessionIdOrderByUpdatedAtDesc(String sessionId);

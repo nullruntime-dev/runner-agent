@@ -103,17 +103,90 @@ public class AgentController {
         // Send events that have content
         // We send all content, not just finalResponse, to enable proper streaming
         if (content != null && !content.isBlank()) {
-            // Skip tool call JSON responses (they typically contain function_call or tool markers)
-            if (content.startsWith("{") && (content.contains("\"function_call\"") || content.contains("\"tool_calls\""))) {
-                log.debug("Skipping tool call event");
+            // Transform content - extract function names or filter internal data
+            String transformedContent = transformContent(content);
+            if (transformedContent == null) {
+                log.debug("Filtering internal ADK event");
                 return;
             }
 
             SseEmitter.SseEventBuilder builder = SseEmitter.event()
                     .name("message")
-                    .data(content);
+                    .data(transformedContent);
 
             emitter.send(builder);
+        }
+    }
+
+    /**
+     * Transforms content - extracts function names from raw ADK data and formats them cleanly
+     * Returns null if content should be completely filtered out
+     */
+    private String transformContent(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+
+        // Extract function name from FunctionCall patterns and return clean format
+        if (content.contains("FunctionCall{") && content.contains("name=Optional[")) {
+            String functionName = extractFunctionName(content);
+            if (functionName != null) {
+                return "[[FUNCTION_CALL:" + functionName + "]]";
+            }
+            return null;
+        }
+
+        // Extract function name from FunctionResponse patterns
+        if (content.contains("FunctionResponse{") && content.contains("name=Optional[")) {
+            String functionName = extractFunctionName(content);
+            if (functionName != null) {
+                return "[[FUNCTION_RESPONSE:" + functionName + "]]";
+            }
+            return null;
+        }
+
+        // Filter other internal ADK patterns completely
+        if (content.contains("ToolCall{") ||
+            content.contains("ToolResponse{") ||
+            content.contains("ToolResult{")) {
+            return null;
+        }
+
+        // Filter JSON-formatted tool calls
+        if (content.startsWith("{") && (content.contains("\"function_call\"") || content.contains("\"tool_calls\""))) {
+            return null;
+        }
+
+        // Filter lines that start with "Function Call:" or "Function Response:"
+        if (content.startsWith("Function Call:") || content.startsWith("Function Response:")) {
+            return null;
+        }
+
+        // Filter content with ADK internal IDs
+        if (content.contains("id=Optional[adk-")) {
+            return null;
+        }
+
+        return content;
+    }
+
+    /**
+     * Extracts function name from ADK toString() output
+     * Example: "FunctionCall{id=Optional[...], name=Optional[send_slack_message], args=...}"
+     */
+    private String extractFunctionName(String content) {
+        try {
+            int nameStart = content.indexOf("name=Optional[");
+            if (nameStart == -1) return null;
+
+            nameStart += "name=Optional[".length();
+            int nameEnd = content.indexOf("]", nameStart);
+            if (nameEnd == -1) return null;
+
+            return content.substring(nameStart, nameEnd);
+        } catch (Exception e) {
+            log.debug("Failed to extract function name from: {}", content);
+            return null;
         }
     }
 }

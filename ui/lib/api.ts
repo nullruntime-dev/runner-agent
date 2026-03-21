@@ -261,9 +261,17 @@ export interface RunCustomSkillRequest {
 }
 
 export async function getCustomSkills(agentId: string): Promise<CustomSkill[]> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch custom skills');
-  return res.json();
+  try {
+    const res = await fetch(`/api/agents/${agentId}/custom-skills`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error('Failed to fetch custom skills:', res.status, res.statusText);
+      return []; // Return empty array instead of throwing
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching custom skills:', err);
+    return []; // Return empty array on error
+  }
 }
 
 export async function getCustomSkill(agentId: string, name: string): Promise<CustomSkill> {
@@ -329,6 +337,109 @@ export async function runCustomSkill(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request || {}),
+  });
+  return res.json();
+}
+
+// Scheduled Tasks types and functions
+
+export type ScheduledTaskType = 'PROMPT' | 'SKILL' | 'COMMAND';
+export type ScheduleType = 'CRON' | 'INTERVAL' | 'DAILY' | 'WEEKLY';
+export type NotificationTarget = 'SLACK' | 'EMAIL' | 'LOG' | 'NONE';
+
+export interface ScheduledTask {
+  id: number;
+  name: string;
+  description: string;
+  type: ScheduledTaskType;
+  action: string;
+  scheduleType: ScheduleType;
+  cronExpression: string | null;
+  intervalMinutes: number | null;
+  timeOfDay: string | null;
+  dayOfWeek: number | null;
+  notificationTarget: NotificationTarget;
+  notificationConfig: string | null;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  lastRunStatus: string | null;
+  lastRunResult: string | null;
+  runCount: number;
+  failureCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateScheduleRequest {
+  name: string;
+  description?: string;
+  type: ScheduledTaskType;
+  action: string;
+  scheduleType: ScheduleType;
+  cronExpression?: string;
+  intervalMinutes?: number;
+  timeOfDay?: string;
+  dayOfWeek?: number;
+  notificationTarget?: NotificationTarget;
+  notificationConfig?: string;
+}
+
+export async function getScheduledTasks(agentId: string): Promise<ScheduledTask[]> {
+  try {
+    const res = await fetch(`/api/agents/${agentId}/schedules`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error('Failed to fetch schedules:', res.status);
+      return [];
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching schedules:', err);
+    return [];
+  }
+}
+
+export async function createScheduledTask(
+  agentId: string,
+  request: CreateScheduleRequest
+): Promise<{ success: boolean; task?: ScheduledTask; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/schedules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  return res.json();
+}
+
+export async function toggleScheduledTask(
+  agentId: string,
+  scheduleId: number,
+  enabled: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  return res.json();
+}
+
+export async function runScheduledTaskNow(
+  agentId: string,
+  scheduleId: number
+): Promise<{ success: boolean; result?: string; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}/run`, {
+    method: 'POST',
+  });
+  return res.json();
+}
+
+export async function deleteScheduledTask(
+  agentId: string,
+  scheduleId: number
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
+    method: 'DELETE',
   });
   return res.json();
 }

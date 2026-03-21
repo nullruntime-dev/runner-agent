@@ -134,6 +134,25 @@ public class AgentService {
             For PROMPT skills, definition_json format: {"systemPrompt":"...","personality":"...","outputFormat":"markdown"}
             For WORKFLOW skills, definition_json format: {"steps":[{"name":"step1","type":"command","command":"...","onFailure":"goto:label"}]}
 
+            SCHEDULED TASKS (Autopilot Mode):
+            - schedule_daily_task: Schedule something to run daily at a specific time
+              Example: "Schedule daily email summary at 9am" → schedule_daily_task(name="email-summary", time="09:00", task_type="prompt", action="List my unread emails and summarize them")
+            - schedule_interval_task: Schedule something to run every X minutes
+              Example: "Check Slack every 30 minutes" → schedule_interval_task(name="slack-check", interval_minutes=30, ...)
+            - schedule_weekly_task: Schedule something weekly
+              Example: "Every Friday at 5pm, send weekly report" → schedule_weekly_task(name="weekly-report", day_of_week="friday", time="17:00", ...)
+            - list_schedules: Show all scheduled tasks
+            - toggle_schedule: Enable/disable a schedule by name
+            - delete_schedule: Remove a scheduled task
+            - run_schedule_now: Manually trigger a scheduled task immediately
+
+            Task types for schedules:
+            - 'prompt': Send a prompt to the AI (most flexible - AI can use any tool)
+            - 'skill': Run a specific skill by name
+            - 'command': Run a shell command directly
+
+            Notification options: 'slack', 'email', 'log' (default), 'none'
+
             MODE DETECTION:
             When messages start with a mode prefix, focus on that skill:
             - [Flirt Assistant Mode] = Focus on dating/flirting help. Be charming, witty, and give multiple response options.
@@ -173,7 +192,8 @@ public class AgentService {
             GmailApiTool gmailApiTool,
             SmtpTool smtpTool,
             FlirtTool flirtTool,
-            CustomSkillTool customSkillTool
+            CustomSkillTool customSkillTool,
+            ScheduleTool scheduleTool
     ) {
         log.info("Initializing ADK AgentService with model={}", adkConfig.getModel());
 
@@ -233,6 +253,16 @@ public class AgentService {
         tools.add(FunctionTool.create(customSkillTool, "toggleCustomSkill"));
         log.info("Custom Skills tools registered");
 
+        // Scheduled Tasks tools (autopilot mode)
+        tools.add(FunctionTool.create(scheduleTool, "scheduleDailyTask"));
+        tools.add(FunctionTool.create(scheduleTool, "scheduleIntervalTask"));
+        tools.add(FunctionTool.create(scheduleTool, "scheduleWeeklyTask"));
+        tools.add(FunctionTool.create(scheduleTool, "listSchedules"));
+        tools.add(FunctionTool.create(scheduleTool, "toggleSchedule"));
+        tools.add(FunctionTool.create(scheduleTool, "deleteSchedule"));
+        tools.add(FunctionTool.create(scheduleTool, "runScheduleNow"));
+        log.info("Scheduled Tasks tools registered - autopilot mode enabled!");
+
         LlmAgent agent = LlmAgent.builder()
                 .name("runner-assistant")
                 .description("A deployment assistant that executes commands and monitors executions")
@@ -271,8 +301,9 @@ public class AgentService {
 
                 if (event.finalResponse()) {
                     String content = event.stringifyContent();
-                    if (content != null && !content.isBlank()) {
-                        responseBuilder.append(content);
+                    String transformed = transformAdkContent(content);
+                    if (transformed != null) {
+                        responseBuilder.append(transformed);
                     }
                 }
             });
@@ -327,6 +358,84 @@ public class AgentService {
     public void clearSession(String sessionId) {
         sessions.remove(sessionId);
         log.info("Cleared session id={}", sessionId);
+    }
+
+    /**
+     * Transforms content - extracts function names from raw ADK data and formats them cleanly
+     * Returns null if content should be completely filtered out
+     */
+    private String transformAdkContent(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+
+        // Extract function name from FunctionCall patterns and return clean format
+        if (content.contains("FunctionCall{") && content.contains("name=Optional[")) {
+            String functionName = extractFunctionName(content);
+            if (functionName != null) {
+                return "[[FUNCTION_CALL:" + functionName + "]]";
+            }
+            return null;
+        }
+
+        // Extract function name from FunctionResponse patterns
+        if (content.contains("FunctionResponse{") && content.contains("name=Optional[")) {
+            String functionName = extractFunctionName(content);
+            if (functionName != null) {
+                return "[[FUNCTION_RESPONSE:" + functionName + "]]";
+            }
+            return null;
+        }
+
+        // Filter other internal ADK patterns completely
+        if (content.contains("ToolCall{") ||
+            content.contains("ToolResponse{") ||
+            content.contains("ToolResult{")) {
+            return null;
+        }
+
+        // Filter JSON-formatted tool calls
+        if (content.startsWith("{") && (content.contains("\"function_call\"") || content.contains("\"tool_calls\""))) {
+            return null;
+        }
+
+        // Filter lines that start with "Function Call:" or "Function Response:"
+        if (content.startsWith("Function Call:") || content.startsWith("Function Response:")) {
+            return null;
+        }
+
+        // Filter content with ADK internal IDs
+        if (content.contains("id=Optional[adk-")) {
+            return null;
+        }
+
+        return content;
+    }
+
+    /**
+     * Extracts function name from ADK toString() output
+     */
+    private String extractFunctionName(String content) {
+        try {
+            int nameStart = content.indexOf("name=Optional[");
+            if (nameStart == -1) return null;
+
+            nameStart += "name=Optional[".length();
+            int nameEnd = content.indexOf("]", nameStart);
+            if (nameEnd == -1) return null;
+
+            return content.substring(nameStart, nameEnd);
+        } catch (Exception e) {
+            log.debug("Failed to extract function name: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * @deprecated Use transformAdkContent instead
+     */
+    private boolean isInternalAdkContent(String content) {
+        return transformAdkContent(content) == null;
     }
 
     public record ChatResult(String sessionId, String response) {}
