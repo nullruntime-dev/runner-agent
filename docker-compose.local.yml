@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nullruntimedev/griphook/agent:latest
+    image: nullruntimedev/griphook-agent:latest
     container_name: griphookdev-agent
     restart: unless-stopped
     ports:
@@ -86,7 +86,7 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
-    image: nullruntimedev/griphook/ui:latest
+    image: nullruntimedev/griphook-ui:latest
     container_name: griphookdev-ui
     restart: unless-stopped
     ports:

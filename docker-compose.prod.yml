@@ -1,7 +1,7 @@
 services:
   # Backend - Java/Spring Boot Agent
   agent:
-    image: nullruntimedev/griphook/agent:latest
+    image: nullruntimedev/griphook-agent:latest
     container_name: griphook-agent
     restart: unless-stopped
     ports:
@@ -80,7 +80,7 @@ services:
 
   # Frontend - Next.js UI
   ui:
-    image: nullruntimedev/griphook/ui:latest
+    image: nullruntimedev/griphook-ui:latest
     container_name: griphook-ui
     restart: unless-stopped
     ports:
