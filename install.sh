@@ -74,7 +74,8 @@ show_menu() {
     echo ""
 
     while true; do
-        read -p "Enter choice [1-3, q]: " choice
+        echo -n "Enter choice [1-3, q]: "
+        read choice < /dev/tty
         case "$choice" in
             1) INSTALL_METHOD="docker"; break ;;
             2) INSTALL_METHOD="jar"; break ;;
