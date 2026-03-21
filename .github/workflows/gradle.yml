@@ -109,7 +109,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/griphook/agent:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/griphook-agent:latest
 
       - name: Build and push Docker image for UI
         uses: docker/build-push-action@v6
@@ -117,7 +117,7 @@ jobs:
           context: ./ui
           file: ./ui/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/griphook/agent-ui:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/griphook-ui:latest
 
       # ============================================
       # GitHub Release
