@@ -78,7 +78,7 @@ services:
         reservations:
           memory: 512M
 
-  # Frontend - Next.js UI
+  # Frontend - Next.js U
   ui:
     image: nullruntimedev/griphook-ui:latest
     container_name: griphook-ui

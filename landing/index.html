@@ -1129,6 +1129,7 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 13px;
       line-height: 2;
+      white-space: pre-wrap;
       overflow-x: auto;
       display: none;
     }
@@ -1583,7 +1584,7 @@
     <a href="https://github.com/nullruntime-dev/runner-agent" target="_blank">GitHub</a>
     <div class="mobile-menu-cta">
       <a href="#getting-started" class="btn btn-outline" onclick="closeMobileMenu()">Documentation</a>
-      <a href="/chat" class="btn btn-primary">Launch App</a>
+      <a href="#getting-started" class="btn btn-primary">Install</a>
     </div>
   </div>
 
@@ -1605,7 +1606,7 @@
       </div>
       <div class="nav-cta">
         <a href="#getting-started" class="btn btn-ghost">Docs</a>
-        <a href="/chat" class="btn btn-primary">Launch App</a>
+        <a href="#getting-started" class="btn btn-primary">Install</a>
       </div>
       <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="menuIcon">
@@ -1639,7 +1640,7 @@
           </p>
           <div class="hero-cta">
             <a href="#getting-started" class="btn btn-primary">
-              Get Started
+              Install
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
@@ -1653,30 +1654,35 @@
               <div class="terminal-dot red"></div>
               <div class="terminal-dot yellow"></div>
               <div class="terminal-dot green"></div>
-              <span class="terminal-title">griphook — production</span>
+              <span class="terminal-title">griphook — install</span>
             </div>
             <div class="terminal-body">
               <div class="terminal-line">
+                <span class="terminal-muted"># One-liner install</span>
+              </div>
+              <div class="terminal-line">
                 <span class="terminal-prompt">$</span>
-                <span class="terminal-cmd">docker compose</span>
-                <span class="terminal-flag">-f docker-compose.prod.yml</span>
-                <span class="terminal-string">up -d</span>
+                <span class="terminal-cmd">curl</span>
+                <span class="terminal-flag">-fsSL</span>
+                <span class="terminal-string">https://griphook.dev/install.sh</span>
+                <span class="terminal-muted">|</span>
+                <span class="terminal-cmd">bash</span>
               </div>
               <div class="terminal-line">
                 <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Pulling griphook/agent:latest...</span>
+                <span class="terminal-muted">Select: [1] Docker (Recommended)</span>
               </div>
               <div class="terminal-line">
                 <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Pulling griphook/ui:latest...</span>
+                <span class="terminal-muted">Installing Docker...</span>
               </div>
               <div class="terminal-line">
                 <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Starting griphookdev-agent...</span>
+                <span class="terminal-muted">Pulling images...</span>
               </div>
               <div class="terminal-line">
                 <span class="terminal-success">✓</span>
-                <span class="terminal-success">Deployment successful</span>
+                <span class="terminal-success">GRIPHOOK installed to /opt/griphook</span>
                 <span class="cursor"></span>
               </div>
             </div>
@@ -1972,13 +1978,40 @@
         <div class="code-block reveal reveal-delay-2">
           <div class="code-header">
             <div class="code-tabs">
-              <button class="code-tab active" onclick="switchCodeTab(this, 'docker')">Docker</button>
+              <button class="code-tab active" onclick="switchCodeTab(this, 'shell')">Shell</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'docker')">Docker</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'windows')">Windows</button>
               <button class="code-tab" onclick="switchCodeTab(this, 'jar')">JAR</button>
               <button class="code-tab" onclick="switchCodeTab(this, 'execute')">Execute</button>
               <button class="code-tab" onclick="switchCodeTab(this, 'chat')">AI Chat</button>
               <button class="code-tab" onclick="switchCodeTab(this, 'health')">Health</button>
             </div>
             <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-content active" id="code-shell">
+<span class="comment"># Interactive install (choose Docker, JAR, or Source)</span>
+<span class="keyword">curl</span> -fsSL https://raw.githubusercontent.com/nullruntime-dev/runner-agent/main/install.sh | <span class="keyword">bash</span>
+
+<span class="comment"># Or install directly with Docker (recommended)</span>
+<span class="keyword">curl</span> -fsSL https://raw.githubusercontent.com/nullruntime-dev/runner-agent/main/install.sh | <span class="keyword">bash</span> -s -- --docker
+
+<span class="comment"># Start services</span>
+<span class="keyword">cd</span> /opt/griphook && <span class="keyword">sudo</span> docker compose up -d
+          </div>
+          <div class="code-content" id="code-windows">
+<span class="comment"># Install prerequisites (Administrator PowerShell)</span>
+<span class="keyword">winget</span> install Microsoft.OpenJDK.21
+<span class="keyword">winget</span> install OpenJS.NodeJS
+
+<span class="comment"># Clone and build</span>
+<span class="keyword">git</span> clone https://github.com/nullruntime-dev/runner-agent.git
+<span class="keyword">cd</span> runner-agent
+<span class="keyword">.\gradlew.bat</span> bootJar
+
+<span class="comment"># Run the agent</span>
+<span class="keyword">$env:AGENT_TOKEN</span>=<span class="string">"your-token"</span>
+<span class="keyword">$env:GOOGLE_AI_API_KEY</span>=<span class="string">"your-key"</span>
+<span class="keyword">java</span> -jar build\libs\runner-agent-0.1.0-SNAPSHOT.jar
           </div>
           <div class="code-content" id="code-health">
 <span class="comment"># Check if the agent is running</span>
@@ -2014,7 +2047,7 @@
 
 <span class="comment"># The AI understands natural language!</span>
           </div>
-          <div class="code-content active" id="code-docker">
+          <div class="code-content" id="code-docker">
 <span class="comment"># Clone and configure</span>
 <span class="keyword">git</span> clone https://github.com/nullruntime-dev/runner-agent.git
 <span class="keyword">cd</span> runner-agent
@@ -2188,8 +2221,8 @@ result = response.json()
         <h2>Ready to automate?</h2>
         <p>Deploy Griphook in minutes. Free, open source, and completely self-hosted.</p>
         <div class="cta-buttons">
-          <a href="/chat" class="btn btn-primary">
-            Launch App
+          <a href="#getting-started" class="btn btn-primary">
+            Install
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
