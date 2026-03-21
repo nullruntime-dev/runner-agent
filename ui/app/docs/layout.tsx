@@ -19,25 +19,23 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className="min-h-screen bg-[#050505]">
       {/* Header */}
-      <header className="bg-neutral-900 border-b border-neutral-800 sticky top-0 z-10">
+      <header className="bg-[#0a0a0a] border-b border-[#1a1a1a] sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-white flex items-center justify-center">
-                <svg className="w-4 h-4 text-neutral-900" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <div className="w-7 h-7 bg-[#111] border border-[#2a2a2a] flex items-center justify-center">
+                <span className="text-sm font-bold text-[#00fff2]">G</span>
               </div>
-              <span className="text-sm font-semibold text-white tracking-tight">RUNNER AGENT</span>
+              <span className="text-sm font-semibold text-white tracking-tight">GRIPHOOK</span>
             </Link>
-            <div className="h-4 w-px bg-neutral-700" />
-            <span className="text-xs text-neutral-500 uppercase tracking-wider">Documentation</span>
+            <div className="h-4 w-px bg-[#2a2a2a]" />
+            <span className="text-xs text-[#888] uppercase tracking-wider">Documentation</span>
           </div>
           <Link
             href="/"
-            className="h-8 px-3 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 text-xs font-medium transition-colors"
+            className="h-8 px-3 bg-[#111] hover:bg-[#1a1a1a] border border-[#2a2a2a] text-[#888] hover:text-white text-xs font-medium transition-colors"
           >
             DASHBOARD
           </Link>
@@ -46,7 +44,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
 
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar */}
-        <aside className="w-56 flex-shrink-0 border-r border-neutral-800 min-h-[calc(100vh-3.5rem)] sticky top-14 self-start">
+        <aside className="w-56 flex-shrink-0 border-r border-[#1a1a1a] min-h-[calc(100vh-3.5rem)] sticky top-14 self-start">
           <nav className="py-6 px-4">
             <ul className="space-y-1">
               {navItems.map((item) => {
@@ -57,8 +55,8 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                       href={item.href}
                       className={`block px-3 py-2 text-sm transition-colors ${
                         isActive
-                          ? 'bg-neutral-800 text-white font-medium'
-                          : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          ? 'bg-[#111] text-[#00fff2] font-medium border-l-2 border-[#00fff2] -ml-[2px] pl-[14px]'
+                          : 'text-[#888] hover:text-white hover:bg-[#0a0a0a]'
                       }`}
                     >
                       {item.label}

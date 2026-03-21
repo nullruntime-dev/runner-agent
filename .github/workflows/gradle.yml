@@ -5,69 +5,131 @@
 # This workflow will build a Java project with Gradle and cache/restore any dependencies to improve the workflow execution time
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
 
-name: Java CI with Gradle
-
+name: Java CI with Gradle and docker releases
 on:
   workflow_dispatch:
   release:
-    types: [created]
+    types: [ created ]
 
 jobs:
   build:
-
     runs-on: self-hosted
     permissions:
       contents: write
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
+      - uses: actions/checkout@v4
 
-    # Configure Gradle for optimal use in GitHub Actions, including caching of downloaded dependencies.
-    # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
+      # ============================================
+      # Backend Build (Java)
+      # ============================================
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
-    - name: Build with Gradle Wrapper
-      run: ./gradlew clean bootJar --no-daemon
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
 
-    # publish upload the jars to the maven repository
-    - name: Upload to github artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts
-        path: './build/libs/*.jar'
+      - name: Build with Gradle Wrapper
+        run: ./gradlew clean bootJar --no-daemon
 
-    - name: docker setup
-      uses: docker/setup-buildx-action@v3
+      - name: Create backend zip
+        run: |
+          cd build/libs
+          zip -r ../../runner-agent-backend.zip *.jar
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_HUB_USERNAME  }}
-        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      # ============================================
+      # UI Build (Next.js)
+      # ============================================
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
 
-    - name: Create GitHub Release
-      run: |
-        gh release create build-${{ github.run_number }} \
-          ./build/libs/*.jar \
-          --title "Build #${{ github.run_number }}" \
-          --prerelease
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v6
-      with:
-        context: ./ui
-        file: ./ui/Dockerfile
-        push: true
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/runner-agent:latest
+      - name: Generate Prisma client
+        working-directory: ui
+        run: npx prisma generate
 
+      - name: Build UI
+        working-directory: ui
+        run: npm run build
 
+      - name: Create UI zip
+        run: |
+          cd ui
+          zip -r ../runner-agent-ui.zip \
+            .next/standalone \
+            .next/static \
+            public \
+            prisma/migrations \
+            docker-entrypoint.sh \
+            node_modules/.prisma \
+            node_modules/@prisma/client \
+            node_modules/@prisma/adapter-libsql \
+            node_modules/@libsql/client
+
+      # ============================================
+      # Upload Artifacts
+      # ============================================
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-artifact
+          path: runner-agent-backend.zip
+
+      - name: Upload UI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-artifact
+          path: runner-agent-ui.zip
+
+      # ============================================
+      # Docker Build & Push
+      # ============================================
+      - name: Docker setup
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and push Docker image for backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/agent:latest
+
+      - name: Build and push Docker image for UI
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          file: ./ui/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/agent-ui:latest
+
+      # ============================================
+      # GitHub Release
+      # ============================================
+      - name: Create GitHub Release
+        run: |
+          gh release create build-${{ github.run_number }} \
+            runner-agent-backend.zip \
+            runner-agent-ui.zip \
+            --title "Build #${{ github.run_number }}" \
+            --prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 

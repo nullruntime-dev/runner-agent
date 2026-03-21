@@ -1,598 +1,127 @@
-# Deploy Agent — CLAUDE.md
+# CLAUDE.md
 
-## Project Overview
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-A lightweight **generic remote command executor** agent written in Java (Spring Boot).
-It accepts HTTP requests containing a list of shell commands (steps), executes them
-sequentially on the host machine, and streams output back to the caller via SSE.
+## Build & Run Commands
 
-Designed to be used as a **deployment target** for GitHub Actions self-hosted runners.
-The GitHub runner builds and pushes artifacts, then POSTs execution steps to this agent.
-The agent runs whatever commands it receives — no project-specific knowledge required.
+```bash
+# Backend (Java 21 / Spring Boot 3.4)
+./gradlew bootRun                              # Run backend (requires GOOGLE_AI_API_KEY env var)
+./gradlew build                                # Build + run tests
+./gradlew test                                 # Run tests only
+./gradlew test --tests "ClassName"             # Run single test class
+./gradlew test --tests "ClassName.methodName"  # Run single test method
+./gradlew bootJar                              # Build executable JAR
 
----
+# Frontend (Next.js 16 / React 19)
+cd ui && npm install                 # Install dependencies (first time)
+cd ui && npm run dev                 # Run frontend at http://localhost:3000
+cd ui && npm run build               # Production build
+cd ui && npm run lint                # Run ESLint
+```
 
 ## Architecture
 
 ```
-GitHub Actions (self-hosted runner, same LAN)
-    │
-    │  POST /execute  (steps as JSON)
-    ▼
-Deploy Agent (this project)
-    │
-    ├── Runs steps via ProcessBuilder sequentially
-    ├── Streams stdout/stderr via SSE (SseEmitter)
-    ├── Persists execution history in H2 (file mode)
-    └── Reports exit code back to caller
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            Runner Agent                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  POST /execute ──► ExecutorService (@Async) ──► StepRunner              │
+│                    └── ConcurrentHashMap<id, Process> for cancellation  │
+│                                                                         │
+│  /agent/chat ────► AgentService (Google ADK + Gemini)                   │
+│                    └── ADK Tools in src/.../adk/tools/*.java            │
+│                                                                         │
+│  Slack Socket ───► SlackSocketModeService (WebSocket, no public URL)    │
+│                                                                         │
+│  Skills API ─────► SkillService (slack, gmail, smtp, gmail-api, flirt)  │
+│                    └── Configs stored as JSON in skill_configs table    │
+│                                                                         │
+│  SSE Streaming ──► SseStreamManager (log streaming to UI)               │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
----
+**Key Data Flow:**
+- `POST /execute` → `ExecutorService.execute()` (async) → `StepRunner.run()` per step
+- Each step uses `ProcessBuilder` with shell, streams stdout/stderr to `SseStreamManager`
+- AI chat routes through `AgentService.chat()` which orchestrates ADK tools
+- Session context passed to tools via ThreadLocal
 
-## Tech Stack
+## ADK Tools Pattern
 
-- **Language:** Java 21
-- **Framework:** Spring Boot 3.3
-- **Database:** H2 embedded (file mode — persists between restarts)
-- **ORM:** Spring Data JPA + Hibernate
-- **Process Execution:** `ProcessBuilder` (stdlib)
-- **Log Streaming:** SSE via Spring's `SseEmitter`
-- **Build Tool:** Gradle (Kotlin DSL)
-- **Auth:** Static API key via `Authorization: Bearer <token>` header
+Tools live in `src/main/java/dev/runner/agent/adk/tools/`. Each tool:
+1. Is a `@Component` class with public methods annotated with `@Schema(name="...", description="...")`
+2. Returns `Map<String, Object>` with `success` boolean and either `error` or result data
+3. Checks `SkillService.getSkillConfig(name)` before executing (for configurable skills)
+4. Registered in `AgentService` constructor via `FunctionTool.create(toolInstance, "methodName")`
 
----
-
-## Project Structure
-
-```
-agent/
-├── src/main/java/io/agent/
-│   ├── AgentApplication.java
-│   ├── config/
-│   │   ├── AgentConfig.java              # @ConfigurationProperties
-│   │   ├── AsyncConfig.java              # ThreadPoolTaskExecutor bean
-│   │   └── SecurityConfig.java           # Filter registration
-│   ├── api/
-│   │   ├── ExecuteController.java        # POST /execute
-│   │   ├── ExecutionController.java      # GET /execution/{id}, GET /executions
-│   │   ├── LogsController.java           # GET /execution/{id}/logs (SSE)
-│   │   ├── CancelController.java         # POST /execution/{id}/cancel
-│   │   └── HealthController.java         # GET /health
-│   ├── executor/
-│   │   ├── ExecutorService.java          # Orchestrates step execution (@Async)
-│   │   └── StepRunner.java               # Runs a single step via ProcessBuilder
-│   ├── streaming/
-│   │   └── SseStreamManager.java         # Manages active SseEmitter connections
-│   ├── domain/
-│   │   ├── Execution.java                # @Entity
-│   │   ├── StepResult.java               # @Entity
-│   │   ├── LogLine.java                  # @Entity
-│   │   ├── ExecutionStatus.java          # Enum
-│   │   ├── ExecutionRepository.java      # JpaRepository
-│   │   ├── StepResultRepository.java     # JpaRepository
-│   │   └── LogLineRepository.java        # JpaRepository
-│   ├── dto/
-│   │   ├── ExecuteRequest.java
-│   │   ├── ExecuteResponse.java
-│   │   └── StepDto.java
-│   ├── filter/
-│   │   └── ApiKeyFilter.java             # Auth — OncePerRequestFilter
-│   └── exception/
-│       ├── GlobalExceptionHandler.java   # @RestControllerAdvice
-│       ├── ExecutionNotFoundException.java
-│       └── AgentException.java
-├── src/main/resources/
-│   └── application.yml
-├── src/test/java/io/agent/
-│   ├── executor/
-│   │   └── ExecutorServiceTest.java
-│   └── api/
-│       └── ExecuteControllerTest.java
-├── build.gradle.kts
-├── settings.gradle.kts
-└── Dockerfile
-```
-
----
-
-## build.gradle.kts
-
-```kotlin
-plugins {
-    java
-    id("org.springframework.boot") version "3.3.0"
-    id("io.spring.dependency-management") version "1.1.5"
-}
-
-group = "io.agent"
-version = "0.1.0-SNAPSHOT"
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-}
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-
-    // Embedded database — runs inside the JVM, no separate install needed
-    runtimeOnly("com.h2database:h2")
-
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
-
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-}
-
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
-```
-
----
-
-## application.yml
-
-```yaml
-server:
-  port: 8090
-
-agent:
-  token: ${AGENT_TOKEN}             # required — app refuses to start if not set
-  working-dir: /tmp
-  default-shell: /bin/sh
-  max-concurrent: 5                 # max simultaneous executions
-
-spring:
-  datasource:
-    url: jdbc:h2:file:./agent-data  # file-based — survives restarts
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
-  jpa:
-    hibernate:
-      ddl-auto: update              # auto-creates/updates tables from @Entity on startup
-    show-sql: false
-  h2:
-    console:
-      enabled: true                 # browse data at http://localhost:8090/h2-console
-      path: /h2-console
-```
-
----
-
-## Domain Models
-
-### Execution.java
+Example structure:
 ```java
-@Entity
-@Table(name = "executions")
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-public class Execution {
-
-    @Id
-    private String id;                              // UUID
-
-    @Column(nullable = false)
-    private String name;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ExecutionStatus status;
-
-    @Column(columnDefinition = "TEXT")
-    private String requestJson;                     // full original request stored as JSON
-
-    private String shell;
-    private String workingDir;
-    private Integer exitCode;
-
-    @Column(columnDefinition = "TEXT")
-    private String error;
-
-    private Instant startedAt;
-    private Instant completedAt;
-
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @OneToMany(mappedBy = "execution", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("stepIndex ASC")
-    private List<StepResult> steps = new ArrayList<>();
-}
-```
-
-### StepResult.java
-```java
-@Entity
-@Table(name = "step_results")
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-public class StepResult {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "execution_id", nullable = false)
-    private Execution execution;
-
-    @Column(nullable = false)
-    private int stepIndex;
-
-    @Column(nullable = false)
-    private String name;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String run;
-
-    @Enumerated(EnumType.STRING)
-    private ExecutionStatus status;
-
-    private Integer exitCode;
-
-    @Column(columnDefinition = "TEXT")
-    private String output;                          // combined stdout + stderr
-
-    @Column(columnDefinition = "TEXT")
-    private String error;
-
-    private boolean continueOnError;
-    private Instant startedAt;
-    private Instant completedAt;
-}
-```
-
-### LogLine.java
-```java
-@Entity
-@Table(name = "log_lines")
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-public class LogLine {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(name = "execution_id", nullable = false)
-    private String executionId;
-
-    @Column(nullable = false)
-    private String stepName;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String line;
-
-    @Column(nullable = false)
-    private String stream;                          // "stdout" or "stderr"
-
-    @Column(nullable = false)
-    private Instant createdAt;
-}
-```
-
-### ExecutionStatus.java
-```java
-public enum ExecutionStatus {
-    PENDING,
-    RUNNING,
-    SUCCESS,
-    FAILED,
-    CANCELLED
-}
-```
-
----
-
-## DTOs
-
-### ExecuteRequest.java
-```java
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ExecuteRequest {
-
-    private String id;                              // optional — UUID generated if absent
-
-    @NotBlank(message = "name is required")
-    private String name;
-
-    @NotEmpty(message = "steps cannot be empty")
-    private List<StepDto> steps;
-
-    private Map<String, String> env = new HashMap<>();
-
-    private String workingDir;                      // falls back to agent.working-dir
-
-    private String shell;                           // falls back to agent.default-shell
-
-    private int timeout = 300;                      // total timeout seconds
-}
-```
-
-### StepDto.java
-```java
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class StepDto {
-
-    @NotBlank(message = "step name is required")
-    private String name;
-
-    @NotBlank(message = "run command is required")
-    private String run;
-
-    private int timeout = 60;                       // per-step timeout seconds
-
-    private boolean continueOnError = false;
-}
-```
-
----
-
-## API Endpoints
-
-### POST /execute
-Submit a new execution. Starts async immediately. Returns execution ID.
-
-**Request:** `ExecuteRequest`
-**Response:** `202 Accepted`
-```json
-{ "id": "uuid", "status": "PENDING" }
-```
-
----
-
-### GET /execution/{id}
-Get full status and step results.
-
-**Response:** `200 OK` — `Execution` with all `StepResult` entries.
-**Response:** `404 Not Found` — unknown ID.
-
----
-
-### GET /execution/{id}/logs
-Stream live log lines via **Server-Sent Events**.
-
-- Content-Type: `text/event-stream`
-- Each event: JSON `LogLine` object
-- Closes automatically when execution reaches terminal state
-- If execution already complete: replays stored log lines then closes
-
----
-
-### GET /executions
-List recent executions (summary, no step output).
-
-**Query params:** `?limit=20&status=FAILED`
-
----
-
-### POST /execution/{id}/cancel
-Kill the running execution process.
-
-**Response:** `200 OK`
-**Response:** `409 Conflict` — already in terminal state.
-
----
-
-### GET /health
-No auth required.
-
-**Response:**
-```json
-{ "status": "ok", "version": "0.1.0" }
-```
-
----
-
-## Key Implementation Details
-
-### ExecutorService.java
-```
-- Annotate class with @Service
-- Annotate execute method with @Async("agentExecutor")
-- Inject AgentConfig, StepRunner, SseStreamManager, ExecutionRepository, StepResultRepository
-- On entry: update Execution status to RUNNING, set startedAt
-- Loop through steps: call stepRunner.run(step, env, shell, workingDir)
-- After each step: save StepResult to DB
-- If step fails and continueOnError=false: break loop, set execution FAILED
-- After loop: set execution SUCCESS or FAILED, set completedAt
-- Call sseStreamManager.complete(executionId) when done
-- Keep ConcurrentHashMap<String, Process> activeProcesses for cancellation
-```
-
-### StepRunner.java
-```
-- Use ProcessBuilder to build the command: List.of(shell, "-c", step.getRun())
-- Call processBuilder.environment().putAll(mergedEnv)
-- Call processBuilder.directory(new File(workingDir))
-- Call processBuilder.redirectErrorStream(true) — merge stderr into stdout
-- Start process, read output line by line with BufferedReader
-- For each line: push to SseStreamManager.publish(), append to output StringBuilder
-- Use process.waitFor(timeout, TimeUnit.SECONDS) — destroy if returns false
-- Return StepResult with exitCode, output, status
-```
-
-### SseStreamManager.java
-```
-- ConcurrentHashMap<String, CopyOnWriteArrayList<SseEmitter>> subscribers
-- subscribe(executionId, timeoutMs): create SseEmitter, add to map,
-  register onCompletion/onError/onTimeout callbacks to remove from map
-- publish(executionId, LogLine): send event to all subscribers for that id
-- complete(executionId): call emitter.complete() on all, remove from map
-- On new subscriber for already-complete execution:
-  replay LogLine records from DB for that executionId, then complete immediately
-```
-
-### ApiKeyFilter.java
-```
-- Extend OncePerRequestFilter
-- Skip if path is /health or /h2-console/**
-- Read Authorization header
-- Check starts with "Bearer " and token matches agentConfig.getToken()
-- If invalid: response.setStatus(401), write { "error": "Unauthorized" }, return
-```
-
-### AsyncConfig.java
-```java
-@Configuration
-@EnableAsync
-public class AsyncConfig {
-
-    @Bean(name = "agentExecutor")
-    public Executor agentExecutor(AgentConfig config) {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(config.getMaxConcurrent());
-        executor.setMaxPoolSize(config.getMaxConcurrent());
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("agent-exec-");
-        executor.initialize();
-        return executor;
+@Slf4j
+@Component
+public class MyTool {
+    private final SkillService skillService;
+
+    public MyTool(SkillService skillService) {
+        this.skillService = skillService;
+    }
+
+    @Schema(name = "tool_name", description = "What this tool does")
+    public Map<String, Object> methodName(
+            @Schema(name = "param", description = "Param description") String param
+    ) {
+        Map<String, Object> result = new HashMap<>();
+        // ... logic
+        result.put("success", true);
+        return result;
     }
 }
 ```
 
-### AgentConfig.java
-```java
-@Configuration
-@ConfigurationProperties(prefix = "agent")
-@Data
-public class AgentConfig {
-    private String token;
-    private String workingDir = "/tmp";
-    private String defaultShell = "/bin/sh";
-    private int maxConcurrent = 5;
+## Key Patterns
 
-    @PostConstruct
-    public void validate() {
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException(
-                "AGENT_TOKEN environment variable must be set before starting the agent");
-        }
-    }
-}
-```
+- **Logging:** Use `@Slf4j` with structured format: `log.info("action completed name={} status={}", name, status)`
+- **Async execution:** `ExecutorService.execute()` must have `@Async("agentExecutor")`
+- **Process cancellation:** Store active `Process` in `ConcurrentHashMap`, use `destroyForcibly()`
+- **Error responses:** Return `{ "error": "message" }` via `GlobalExceptionHandler`
+- **Controllers:** Keep thin, use `ResponseEntity<?>` with explicit status codes
+- **DTOs:** Use `@Validated` on controllers, `@NotBlank`/`@NotEmpty` on fields
 
----
+## Database
 
-## Dockerfile
+H2 embedded at `./agent-data.mv.db`. Tables:
+- `executions` / `step_results` / `log_lines` — command execution data
+- `skill_configs` — skill configurations (JSON blob)
+- `crush_profiles` — flirt assistant profiles
+- `gmail_tokens` — Gmail OAuth tokens
 
-```dockerfile
-FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
-COPY build/libs/agent-0.1.0-SNAPSHOT.jar app.jar
-EXPOSE 8090
-ENTRYPOINT ["java", "-jar", "app.jar"]
-```
+Access console: `http://localhost:8090/h2-console` (JDBC URL: `jdbc:h2:file:./agent-data`, user: `sa`, no password)
 
-Build and run:
-```bash
-./gradlew bootJar
-docker build -t deploy-agent .
-docker run \
-  -e AGENT_TOKEN=your-secret-token \
-  -p 8090:8090 \
-  -v $(pwd)/data:/app \
-  deploy-agent
-```
+## Environment Variables
 
----
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GOOGLE_AI_API_KEY` | Yes (for AI) | — | Google AI API key for Gemini |
+| `AGENT_TOKEN` | No | `1234` | API auth token |
+| `AGENT_ADK_MODEL` | No | `gemini-flash-lite-latest` | Gemini model ID |
+| `AGENT_ADK_ENABLED` | No | `true` | Enable/disable AI chat |
+| `AGENT_WORKING_DIR` | No | `/tmp` | Working directory for command execution |
+| `AGENT_DEFAULT_SHELL` | No | `/bin/sh` | Default shell for commands |
+| `AGENT_MAX_CONCURRENT` | No | `5` | Max concurrent executions |
+| `SERVER_PORT` | No | `8090` | Backend server port |
 
-## systemd Service (bare metal)
+See `.env.example` for skill-specific variables (Slack, Gmail, SMTP, etc.).
 
-```ini
-[Unit]
-Description=Deploy Agent
-After=network.target
+## Project Layout
 
-[Service]
-Type=simple
-User=deploy
-WorkingDirectory=/opt/agent
-Environment=AGENT_TOKEN=your-secret-token
-ExecStart=java -jar /opt/agent/agent.jar
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
----
-
-## GitHub Actions Usage
-
-Inline steps:
-```yaml
-- name: Deploy to production
-  run: |
-    curl -s -f -X POST http://${{ vars.AGENT_HOST }}:8090/execute \
-      -H "Authorization: Bearer ${{ secrets.AGENT_TOKEN }}" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "Deploy ${{ github.repository }} @ ${{ github.sha }}",
-        "steps": [
-          { "name": "Pull",   "run": "docker pull ${{ vars.REGISTRY }}/myapp:${{ github.sha }}" },
-          { "name": "Stop",   "run": "docker stop myapp || true" },
-          { "name": "Start",  "run": "docker run -d --name myapp --restart unless-stopped -p 8080:8080 ${{ vars.REGISTRY }}/myapp:${{ github.sha }}" },
-          { "name": "Health", "run": "sleep 5 && curl -f http://localhost:8080/actuator/health" }
-        ],
-        "timeout": 120
-      }'
-```
-
-Or reference a file in the repo (recommended — keeps pipeline clean):
-```yaml
-- name: Deploy to production
-  run: |
-    curl -s -f -X POST http://${{ vars.AGENT_HOST }}:8090/execute \
-      -H "Authorization: Bearer ${{ secrets.AGENT_TOKEN }}" \
-      -H "Content-Type: application/json" \
-      -d @.github/deploy/prod.json
-```
-
-Store per-environment step files in the repo:
-```
-.github/
-  deploy/
-    prod.json
-    staging.json
-    gpu-server.json
-```
-
----
-
-## Coding Guidelines
-
-- Use `@Slf4j` for all logging — structured messages: `log.info("step completed name={} exitCode={}", name, code)`
-- All controllers return `ResponseEntity<?>` with explicit HTTP status codes
-- All error responses return `{ "error": "message" }` — handled centrally in `GlobalExceptionHandler`
-- Use `@Validated` on controller classes, `@NotBlank` / `@NotEmpty` on DTOs
-- `ExecutorService.execute()` must be `@Async("agentExecutor")` — never block the HTTP thread
-- Store active `Process` in `ConcurrentHashMap` inside `ExecutorService` for cancellation support
-- Use `@Transactional` on all service methods that write to the database
-- `SseEmitter` timeout = execution timeout + 30 seconds buffer
-- Never swallow exceptions silently — always log with context before rethrowing or handling
-- Keep controllers thin: validate input, call service, return response — no business logic in controllers
-
----
-
-## Out of Scope (do not add)
-
-- No frontend / dashboard UI
-- No OAuth or JWT — API key only
-- No job scheduling / cron
-- No agent-to-agent communication
-- No secret management — caller passes secrets as env vars in the request
-- No plugin system
-- No multi-tenancy
-- No WebSocket — SSE is sufficient for one-way log streaming
+- `src/main/java/dev/runner/agent/adk/` — AI agent: `AgentService`, `AdkConfig`, tools
+- `src/main/java/dev/runner/agent/adk/tools/` — ADK tool implementations (Slack, Gmail, SMTP, Flirt, etc.)
+- `src/main/java/dev/runner/agent/api/` — REST controllers
+- `src/main/java/dev/runner/agent/executor/` — Command execution: `ExecutorService`, `StepRunner`
+- `src/main/java/dev/runner/agent/service/` — Business services:
+  - `SkillService` — manages skill configurations (JSON in `skill_configs` table)
+  - `CustomSkillService` — user-defined custom skills
+  - `GmailApiService` — Gmail OAuth token handling
+  - `CrushProfileService` — profile persistence for FlirtTool
+- `src/main/java/dev/runner/agent/slack/` — Slack Socket Mode integration
+- `ui/` — Next.js 16 frontend with React 19, Tailwind 4, TypeScript

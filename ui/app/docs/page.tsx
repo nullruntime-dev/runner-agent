@@ -4,8 +4,8 @@ import { FeatureCard, CodeBlock } from './components';
 export default function DocsPage() {
   return (
     <div>
-      <h1 className="text-3xl font-bold text-white mb-4">Runner Agent</h1>
-      <p className="text-lg text-neutral-400 mb-8">
+      <h1 className="text-3xl font-bold text-white mb-4">GRIPHOOK</h1>
+      <p className="text-lg text-[#888] mb-8">
         A lightweight, distributed remote command execution system. Deploy agents on your servers
         and execute commands remotely with real-time log streaming.
       </p>
@@ -26,6 +26,14 @@ export default function DocsPage() {
         <FeatureCard
           title="API-first Design"
           description="Full REST API for integration with CI/CD pipelines and automation tools"
+        />
+        <FeatureCard
+          title="AI Chat Assistant"
+          description="Natural language interface to execute commands, check status, and troubleshoot deployments"
+        />
+        <FeatureCard
+          title="Integrations (Skills)"
+          description="Connect to Slack, Gmail, SMTP, and even a Flirt Assistant for dating help"
         />
       </div>
 
@@ -53,27 +61,27 @@ export default function DocsPage() {
 
       <h2 className="text-xl font-bold text-white mt-10 mb-4">Components</h2>
       <div className="space-y-4">
-        <div className="bg-neutral-900 border border-neutral-800 p-4">
+        <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4">
           <h3 className="text-sm font-semibold text-white mb-2">Agent (Java/Spring Boot)</h3>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-[#888]">
             Runs on target servers. Executes shell commands, streams logs via SSE, stores history in H2 database.
           </p>
         </div>
-        <div className="bg-neutral-900 border border-neutral-800 p-4">
+        <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4">
           <h3 className="text-sm font-semibold text-white mb-2">Control Center (Next.js)</h3>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-[#888]">
             Central dashboard for managing multiple agents. Caches data in SQLite, provides unified view of all executions.
           </p>
         </div>
       </div>
 
       <h2 className="text-xl font-bold text-white mt-10 mb-4">Get Started</h2>
-      <p className="text-neutral-400 mb-4">
+      <p className="text-[#888] mb-4">
         Ready to deploy? Follow the quick start guide to get up and running.
       </p>
       <Link
         href="/docs/quickstart"
-        className="inline-flex h-10 px-6 bg-white hover:bg-neutral-200 text-neutral-900 text-sm font-semibold items-center transition-colors"
+        className="inline-flex h-10 px-6 bg-gradient-to-r from-[#00fff2] to-[#00cccc] hover:from-[#00cccc] hover:to-[#00fff2] text-black text-sm font-semibold items-center transition-all shadow-[0_0_20px_rgba(0,255,242,0.3)]"
       >
         Quick Start Guide
       </Link>

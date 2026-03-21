@@ -61,7 +61,7 @@ export default function LogStream({ executionId, isComplete }: LogStreamProps) {
         <div className="flex items-center gap-2">
           {!isComplete && (
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2 h-2  ${
                 connected ? 'bg-green-500' : 'bg-red-500'
               }`}
             />

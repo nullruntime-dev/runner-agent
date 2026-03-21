@@ -1,0 +1,2850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Griphook — AI-Powered Deployment Agent</title>
+  <meta name="description" content="The deployment agent that actually does things. Remote command execution, AI chat, and extensible skills.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #050505;
+      --bg-secondary: #0a0a0a;
+      --bg-elevated: #0f0f0f;
+      --bg-card: #111;
+      --border: #1a1a1a;
+      --border-bright: #2a2a2a;
+      --text-primary: #fff;
+      --text-secondary: #888;
+      --text-muted: #444;
+
+      --cyan: #00fff2;
+      --magenta: #ff00ea;
+      --yellow: #fff000;
+      --lime: #00ff66;
+      --orange: #ff6600;
+      --red: #ff0044;
+      --blue: #0066ff;
+      --purple: #9900ff;
+
+      --glow-cyan: 0 0 40px rgba(0, 255, 242, 0.3);
+      --glow-magenta: 0 0 40px rgba(255, 0, 234, 0.3);
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    body.menu-open {
+      overflow: hidden;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    ::selection {
+      background: var(--cyan);
+      color: var(--bg-primary);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 20px;
+      }
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Floating orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 0;
+      animation: float 20s ease-in-out infinite;
+    }
+
+    .orb-1 {
+      width: 600px;
+      height: 600px;
+      background: var(--cyan);
+      top: -200px;
+      right: -200px;
+      opacity: 0.15;
+    }
+
+    .orb-2 {
+      width: 500px;
+      height: 500px;
+      background: var(--magenta);
+      bottom: -100px;
+      left: -200px;
+      opacity: 0.12;
+      animation-delay: -10s;
+    }
+
+    .orb-3 {
+      width: 400px;
+      height: 400px;
+      background: var(--purple);
+      top: 50%;
+      left: 50%;
+      opacity: 0.08;
+      animation-delay: -5s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(50px, -30px) scale(1.05); }
+      50% { transform: translate(-20px, 40px) scale(0.95); }
+      75% { transform: translate(-40px, -20px) scale(1.02); }
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: rgba(5, 5, 5, 0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;list
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .logo-placeholder {
+      width: 40px;
+      height: 40px;
+      background: var(--bg-card);
+      border: 2px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo-placeholder::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
+      opacity: 0.1;
+    }
+
+    .logo-placeholder img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .logo-placeholder span {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--cyan);
+      transition: width 0.3s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-links a:hover::after {
+      width: 100%;
+    }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: var(--text-primary);
+      color: var(--bg-primary);
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0,255,242,0.4), transparent);
+      transition: left 0.5s;
+    }
+
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(255,255,255,0.2);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border-bright);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: var(--glow-cyan);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 10px 16px;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text-primary);
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 120px 0 80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    @media (max-width: 1000px) {
+      .hero-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+    }
+
+    .hero-tag-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--lime);
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0.3; }
+    }
+
+    .hero h1 {
+      font-size: clamp(48px, 7vw, 72px);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 28px;
+    }
+
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero h1 .stroke {
+      -webkit-text-stroke: 1px var(--text-primary);
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 480px;
+      line-height: 1.8;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 1000px) {
+      .hero-subtitle {
+        margin: 0 auto 40px;
+      }
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1000px) {
+      .hero-cta {
+        justify-content: center;
+      }
+    }
+
+    .hero-visual {
+      position: relative;
+    }
+
+    .terminal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-bright);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .terminal::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta), var(--yellow));
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+    }
+
+    .terminal-dot.red { background: var(--red); }
+    .terminal-dot.yellow { background: var(--yellow); }
+    .terminal-dot.green { background: var(--lime); }
+
+    .terminal-title {
+      margin-left: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 2;
+    }
+
+    .terminal-line {
+      display: flex;
+      gap: 12px;
+      opacity: 0;
+      animation: typeIn 0.5s forwards;
+    }
+
+    .terminal-line:nth-child(1) { animation-delay: 0.5s; }
+    .terminal-line:nth-child(2) { animation-delay: 1s; }
+    .terminal-line:nth-child(3) { animation-delay: 1.5s; }
+    .terminal-line:nth-child(4) { animation-delay: 2s; }
+    .terminal-line:nth-child(5) { animation-delay: 2.5s; }
+
+    @keyframes typeIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .terminal-prompt { color: var(--cyan); }
+    .terminal-cmd { color: var(--text-primary); }
+    .terminal-flag { color: var(--magenta); }
+    .terminal-string { color: var(--yellow); }
+    .terminal-success { color: var(--lime); }
+    .terminal-muted { color: var(--text-muted); }
+
+    .cursor {
+      display: inline-block;
+      width: 10px;
+      height: 18px;
+      background: var(--cyan);
+      animation: cursorBlink 1s infinite;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+
+    @keyframes cursorBlink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    /* Stats bar */
+    .stats {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 1;
+      background: var(--bg-secondary);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 40px;
+    }
+
+    @media (max-width: 800px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -2px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-value .accent {
+      -webkit-text-fill-color: var(--cyan);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+    }
+
+    /* Section styling */
+    section {
+      position: relative;
+      z-index: 1;
+    }
+
+    .section-header {
+      margin-bottom: 80px;
+    }
+
+    .section-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 24px;
+    }
+
+    .section-tag::before {
+      content: '';
+      width: 40px;
+      height: 1px;
+      background: var(--cyan);
+    }
+
+    .section-title {
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      max-width: 700px;
+    }
+
+    .section-subtitle {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 500px;
+      margin-top: 24px;
+      line-height: 1.8;
+    }
+
+    /* Features */
+    .features {
+      padding: 140px 0;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--border);
+    }
+
+    @media (max-width: 900px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-card {
+      background: var(--bg-secondary);
+      padding: 48px 40px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s;
+    }
+
+    .feature-card:hover {
+      background: var(--bg-card);
+    }
+
+    .feature-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .feature-icon::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0.1;
+    }
+
+    .feature-icon svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .feature-icon.cyan { color: var(--cyan); }
+    .feature-icon.magenta { color: var(--magenta); }
+    .feature-icon.yellow { color: var(--yellow); }
+    .feature-icon.lime { color: var(--lime); }
+    .feature-icon.orange { color: var(--orange); }
+    .feature-icon.purple { color: var(--purple); }
+
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+
+    .feature-number {
+      position: absolute;
+      top: 32px;
+      right: 32px;
+      font-size: 64px;
+      font-weight: 700;
+      color: var(--border);
+      line-height: 1;
+      letter-spacing: -4px;
+    }
+
+    /* Skills */
+    .skills {
+      padding: 140px 0;
+      background: var(--bg-secondary);
+    }
+
+    .skills-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+
+    @media (max-width: 1000px) {
+      .skills-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 500px) {
+      .skills-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .skill-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      padding: 40px 32px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s;
+      cursor: pointer;
+    }
+
+    .skill-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      background: linear-gradient(to top, currentColor, transparent);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+
+    .skill-card:hover {
+      transform: translateY(-8px);
+      border-color: currentColor;
+    }
+
+    .skill-card:hover::after {
+      opacity: 0.05;
+    }
+
+    .skill-card.slack { color: var(--purple); }
+    .skill-card.gmail { color: var(--red); }
+    .skill-card.smtp { color: var(--orange); }
+    .skill-card.flirt { color: var(--magenta); }
+    .skill-card.gmail-api { color: var(--blue); }
+    .skill-card.custom { color: #00cc88; }
+
+    .skill-icon {
+      width: 72px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .skill-icon::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0.1;
+    }
+
+    .skill-icon svg {
+      width: 36px;
+      height: 36px;
+    }
+
+    .skill-card h3 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+    }
+
+    .skill-card > p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .skill-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 1px solid;
+    }
+
+    .skill-status::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    .skill-learn-more {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .skill-card:hover .skill-learn-more {
+      color: currentColor;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.7; }
+    }
+
+    /* Getting Started */
+    .getting-started {
+      padding: 140px 0;
+      background: var(--bg-primary);
+    }
+
+    .getting-started-content {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 80px;
+      align-items: start;
+    }
+
+    @media (max-width: 1000px) {
+      .getting-started-content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .getting-started-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .gs-step {
+      display: flex;
+      gap: 24px;
+      padding: 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+
+    .gs-step:hover {
+      border-color: var(--cyan);
+      background: var(--bg-card);
+    }
+
+    .gs-step-number {
+      width: 48px;
+      height: 48px;
+      background: var(--bg-primary);
+      border: 2px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+
+    .gs-step-content h4 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .gs-step-content p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .gs-step-content code {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 8px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--yellow);
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 140px 0;
+    }
+
+    .steps-container {
+      display: flex;
+      gap: 0;
+      margin-top: 80px;
+      position: relative;
+    }
+
+    .steps-container::before {
+      content: '';
+      position: absolute;
+      top: 40px;
+      left: 80px;
+      right: 80px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta), var(--yellow));
+    }
+
+    @media (max-width: 900px) {
+      .steps-container {
+        flex-direction: column;
+        gap: 60px;
+      }
+
+      .steps-container::before {
+        display: none;
+      }
+    }
+
+    .step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 80px;
+      height: 80px;
+      background: var(--bg-primary);
+      border: 2px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 32px;
+      font-size: 32px;
+      font-weight: 700;
+      position: relative;
+      z-index: 1;
+      transition: all 0.4s;
+    }
+
+    .step:hover .step-number {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: var(--glow-cyan);
+    }
+
+    .step h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      max-width: 280px;
+      margin: 0 auto;
+    }
+
+    /* Code section */
+    .code-section {
+      padding: 140px 0;
+      background: var(--bg-secondary);
+      overflow: hidden;
+    }
+
+    .code-container {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    @media (max-width: 1000px) {
+      .code-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .code-info h2 {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 24px;
+      line-height: 1.2;
+    }
+
+    .code-info p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      margin-bottom: 32px;
+    }
+
+    .code-features {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .code-feature {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+    }
+
+    .code-feature-icon {
+      width: 24px;
+      height: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--lime);
+    }
+
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-bright);
+      position: relative;
+    }
+
+    .code-block::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-tabs {
+      display: flex;
+      gap: 0;
+    }
+
+    .code-tab {
+      padding: 8px 20px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .code-tab.active {
+      color: var(--text-primary);
+      background: var(--bg-primary);
+    }
+
+    .code-tab:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    .code-copy {
+      padding: 8px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .code-copy:hover {
+      color: var(--cyan);
+      border-color: var(--cyan);
+    }
+
+    .code-content {
+      padding: 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 2;
+      overflow-x: auto;
+      display: none;
+    }
+
+    .code-content.active {
+      display: block;
+    }
+
+    .code-content .comment { color: var(--text-muted); }
+    .code-content .keyword { color: var(--magenta); }
+    .code-content .string { color: var(--yellow); }
+    .code-content .property { color: var(--cyan); }
+    .code-content .value { color: var(--lime); }
+
+    /* CTA */
+    .cta {
+      padding: 140px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
+      opacity: 0.05;
+      pointer-events: none;
+    }
+
+    .cta-content {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta h2 {
+      font-size: clamp(40px, 6vw, 64px);
+      font-weight: 700;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+
+    .cta p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 48px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Footer */
+    footer {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+      position: relative;
+      z-index: 1;
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 32px;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-logo-img {
+      width: 32px;
+      height: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .footer-logo-img span {
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .footer-logo-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 40px;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Scroll animations */
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* Mobile menu */
+    .mobile-menu-btn {
+      display: none;
+      background: none;
+      border: 1px solid var(--border-bright);
+      padding: 10px;
+      cursor: pointer;
+      color: var(--text-primary);
+      z-index: 1001;
+    }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(5, 5, 5, 0.98);
+      backdrop-filter: blur(20px);
+      z-index: 999;
+      padding: 100px 40px 40px;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+    }
+
+    .mobile-menu.open {
+      display: flex;
+    }
+
+    .mobile-menu a {
+      display: block;
+      padding: 24px 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .mobile-menu a:hover {
+      color: var(--text-primary);
+      padding-left: 16px;
+    }
+
+    .mobile-menu-cta {
+      margin-top: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .mobile-menu-cta .btn {
+      justify-content: center;
+    }
+
+    @media (max-width: 900px) {
+      .nav-links, .nav-cta {
+        display: none;
+      }
+
+      .mobile-menu-btn {
+        display: flex;
+      }
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(5, 5, 5, 0.9);
+      backdrop-filter: blur(10px);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-bright);
+      max-width: 700px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .modal::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 32px 40px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h2 {
+      font-size: 28px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .modal-header h2 svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .modal-close {
+      width: 44px;
+      height: 44px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      color: var(--text-primary);
+      border-color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 40px;
+    }
+
+    .modal-body p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      margin-bottom: 32px;
+    }
+
+    .modal-section {
+      margin-bottom: 32px;
+    }
+
+    .modal-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .modal-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 16px;
+    }
+
+    .modal-section ul {
+      list-style: none;
+    }
+
+    .modal-section li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .modal-section li:last-child {
+      border-bottom: none;
+    }
+
+    .modal-section li svg {
+      width: 18px;
+      height: 18px;
+      color: var(--lime);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .modal-config {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      padding: 24px;
+    }
+
+    .modal-config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-config-item:last-child {
+      border-bottom: none;
+    }
+
+    .modal-config-item .label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .modal-config-item .value {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+    }
+
+    .modal-config-item .required {
+      color: var(--red);
+      font-size: 10px;
+      margin-left: 8px;
+    }
+
+    .modal-footer {
+      padding: 24px 40px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 16px;
+      justify-content: flex-end;
+    }
+
+    /* Glitch effect */
+    .glitch {
+      position: relative;
+    }
+
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .glitch::before {
+      animation: glitch-1 2s infinite linear alternate-reverse;
+      clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+      -webkit-text-fill-color: var(--cyan);
+    }
+
+    .glitch::after {
+      animation: glitch-2 3s infinite linear alternate-reverse;
+      clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+      -webkit-text-fill-color: var(--magenta);
+    }
+
+    @keyframes glitch-1 {
+      0% { transform: translate(0); }
+      20% { transform: translate(-2px, 2px); }
+      40% { transform: translate(-2px, -2px); }
+      60% { transform: translate(2px, 2px); }
+      80% { transform: translate(2px, -2px); }
+      100% { transform: translate(0); }
+    }
+
+    @keyframes glitch-2 {
+      0% { transform: translate(0); }
+      20% { transform: translate(2px, -2px); }
+      40% { transform: translate(2px, 2px); }
+      60% { transform: translate(-2px, -2px); }
+      80% { transform: translate(-2px, 2px); }
+      100% { transform: translate(0); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Background elements -->
+  <div class="grid-bg"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#features" onclick="closeMobileMenu()">Features</a>
+    <a href="#skills" onclick="closeMobileMenu()">Skills</a>
+    <a href="#getting-started" onclick="closeMobileMenu()">Get Started</a>
+    <a href="#how-it-works" onclick="closeMobileMenu()">How it works</a>
+    <a href="https://github.com/nullruntime-dev/runner-agent" target="_blank">GitHub</a>
+    <div class="mobile-menu-cta">
+      <a href="#getting-started" class="btn btn-outline" onclick="closeMobileMenu()">Documentation</a>
+      <a href="/chat" class="btn btn-primary">Launch App</a>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">
+        <div class="logo-placeholder">
+          <span>G</span>
+        </div>
+        <span class="logo-text">GRIPHOOK</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#skills">Skills</a>
+        <a href="#getting-started">Get Started</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="https://github.com/nullruntime-dev/runner-agent" target="_blank">GitHub</a>
+      </div>
+      <div class="nav-cta">
+        <a href="#getting-started" class="btn btn-ghost">Docs</a>
+        <a href="/chat" class="btn btn-primary">Launch App</a>
+      </div>
+      <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="menuIcon">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="closeIcon" style="display: none;">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <div class="hero-tag">
+            <div class="hero-tag-dot"></div>
+            Open Source & Self-Hosted
+          </div>
+          <h1>
+            <span class="gradient">Deploy</span> with<br>
+            <span class="stroke glitch" data-text="confidence">confidence</span>
+          </h1>
+          <p class="hero-subtitle">
+            The AI-powered deployment agent that executes commands, streams logs in real-time, and lets you build custom skills through natural language.
+          </p>
+          <div class="hero-cta">
+            <a href="#getting-started" class="btn btn-primary">
+              Get Started
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </a>
+            <a href="#how-it-works" class="btn btn-outline">Learn More</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="terminal-dot red"></div>
+              <div class="terminal-dot yellow"></div>
+              <div class="terminal-dot green"></div>
+              <span class="terminal-title">griphook — production</span>
+            </div>
+            <div class="terminal-body">
+              <div class="terminal-line">
+                <span class="terminal-prompt">$</span>
+                <span class="terminal-cmd">docker compose</span>
+                <span class="terminal-flag">-f docker-compose.prod.yml</span>
+                <span class="terminal-string">up -d</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-muted">→</span>
+                <span class="terminal-muted">Pulling griphook/agent:latest...</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-muted">→</span>
+                <span class="terminal-muted">Pulling griphook/ui:latest...</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-muted">→</span>
+                <span class="terminal-muted">Starting griphookdev-agent...</span>
+              </div>
+              <div class="terminal-line">
+                <span class="terminal-success">✓</span>
+                <span class="terminal-success">Deployment successful</span>
+                <span class="cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat reveal">
+          <div class="stat-value">100<span class="accent">%</span></div>
+          <div class="stat-label">Self-Hosted</div>
+        </div>
+        <div class="stat reveal reveal-delay-1">
+          <div class="stat-value"><span class="accent">&lt;</span>10<span class="accent">s</span></div>
+          <div class="stat-label">Deploy Time</div>
+        </div>
+        <div class="stat reveal reveal-delay-2">
+          <div class="stat-value">6<span class="accent">+</span></div>
+          <div class="stat-label">Built-in Skills</div>
+        </div>
+        <div class="stat reveal reveal-delay-3">
+          <div class="stat-value"><span class="accent">∞</span></div>
+          <div class="stat-label">Possibilities</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="section-tag">Features</div>
+        <h2 class="section-title">Built for modern DevOps</h2>
+        <p class="section-subtitle">Everything you need to automate deployments and streamline operations.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-number">01</div>
+          <div class="feature-icon cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+          <h3>Remote Execution</h3>
+          <p>Execute shell commands remotely via HTTP API. Perfect for CI/CD pipelines and automation.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-number">02</div>
+          <div class="feature-icon lime">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20V10M18 20V4M6 20v-4"/>
+            </svg>
+          </div>
+          <h3>Real-time Streaming</h3>
+          <p>Watch deployments live with Server-Sent Events. See stdout and stderr as they happen.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-number">03</div>
+          <div class="feature-icon magenta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h3>AI Chat Interface</h3>
+          <p>Natural language commands powered by Google's ADK. Just tell it what you need.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-number">04</div>
+          <div class="feature-icon yellow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h3>Extensible Skills</h3>
+          <p>Add integrations like Slack, Gmail, and more. Configure once, use everywhere.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-number">05</div>
+          <div class="feature-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3>Secure by Default</h3>
+          <p>Token-based authentication. Runs in your infrastructure. Your data stays yours.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-number">06</div>
+          <div class="feature-icon purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3>Full History</h3>
+          <p>Complete audit trail with persisted logs. Browse, search, and debug past deployments.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-number">07</div>
+          <div class="feature-icon" style="background: rgba(0, 204, 136, 0.15); color: #00cc88; border-color: rgba(0, 204, 136, 0.3);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+            </svg>
+          </div>
+          <h3>Custom Skill Builder</h3>
+          <p>Create your own skills through chat. Define command shortcuts, AI personas, or multi-step workflows.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-number">08</div>
+          <div class="feature-icon blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3>Gmail API</h3>
+          <p>Full Gmail access via OAuth2. Read, search, and reply to emails. Analyze messages with AI.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Skills -->
+  <section class="skills" id="skills">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="section-tag">Skills</div>
+        <h2 class="section-title">Plug-in superpowers</h2>
+        <p class="section-subtitle">Use built-in integrations or create your own custom skills through natural language.</p>
+      </div>
+      <div class="skills-grid">
+        <div class="skill-card slack reveal" onclick="openSkillModal('slack')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+              <path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+              <path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+              <path d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+            </svg>
+          </div>
+          <h3>Slack</h3>
+          <p>Deployment notifications and slash commands</p>
+          <div class="skill-status">Available</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+        <div class="skill-card gmail reveal reveal-delay-1" onclick="openSkillModal('gmail')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3>Gmail</h3>
+          <p>Send emails via Gmail SMTP</p>
+          <div class="skill-status">Available</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+        <div class="skill-card smtp reveal reveal-delay-2" onclick="openSkillModal('smtp')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+          </div>
+          <h3>SMTP</h3>
+          <p>Send through any SMTP server</p>
+          <div class="skill-status">Available</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+        <div class="skill-card flirt reveal reveal-delay-3" onclick="openSkillModal('flirt')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </div>
+          <h3>Flirt Assistant</h3>
+          <p>AI wingman that learns your style</p>
+          <div class="skill-status">Available</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+        <div class="skill-card gmail-api reveal" onclick="openSkillModal('gmail-api')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </div>
+          <h3>Gmail API</h3>
+          <p>Full inbox access via OAuth2</p>
+          <div class="skill-status">Available</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+        <div class="skill-card custom reveal reveal-delay-1" onclick="openSkillModal('custom')">
+          <div class="skill-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+            </svg>
+          </div>
+          <h3>Custom Skills</h3>
+          <p>Build your own skills via chat</p>
+          <div class="skill-status" style="background: rgba(0, 204, 136, 0.15); color: #00cc88; border-color: rgba(0, 204, 136, 0.3);">New</div>
+          <span class="skill-learn-more">
+            Learn more
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Getting Started -->
+  <section class="getting-started" id="getting-started">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="section-tag">Getting Started</div>
+        <h2 class="section-title">Up and running in minutes</h2>
+        <p class="section-subtitle">Follow these steps to deploy your own Griphook instance.</p>
+      </div>
+      <div class="getting-started-content">
+        <div class="getting-started-steps">
+          <div class="gs-step reveal">
+            <div class="gs-step-number">1</div>
+            <div class="gs-step-content">
+              <h4>Clone the repository</h4>
+              <p>Get the source code from GitHub.</p>
+              <code>git clone https://github.com/nullruntime-dev/runner-agent.git<br>cd runner-agent</code>
+            </div>
+          </div>
+          <div class="gs-step reveal reveal-delay-1">
+            <div class="gs-step-number">2</div>
+            <div class="gs-step-content">
+              <h4>Configure environment</h4>
+              <p>Copy the example config and set your API keys.</p>
+              <code>cp .env.example .env<br># Edit .env: AGENT_TOKEN, GOOGLE_AI_API_KEY</code>
+            </div>
+          </div>
+          <div class="gs-step reveal reveal-delay-2">
+            <div class="gs-step-number">3</div>
+            <div class="gs-step-content">
+              <h4>Deploy with Docker Compose</h4>
+              <p>Start both the agent and UI with a single command.</p>
+              <code>docker compose -f docker-compose.prod.yml up -d</code>
+            </div>
+          </div>
+          <div class="gs-step reveal reveal-delay-3">
+            <div class="gs-step-number">4</div>
+            <div class="gs-step-content">
+              <h4>Or build from source</h4>
+              <p>Build the JAR with Gradle and run with Java 21+.</p>
+              <code>./gradlew bootJar<br>java -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar</code>
+            </div>
+          </div>
+          <div class="gs-step reveal reveal-delay-4">
+            <div class="gs-step-number">5</div>
+            <div class="gs-step-content">
+              <h4>Access the dashboard</h4>
+              <p>Open your browser and start deploying. Backend on 8090, UI on 3000.</p>
+              <code>http://localhost:3000</code>
+            </div>
+          </div>
+        </div>
+        <div class="code-block reveal reveal-delay-2">
+          <div class="code-header">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchCodeTab(this, 'docker')">Docker</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'jar')">JAR</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'execute')">Execute</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'chat')">AI Chat</button>
+              <button class="code-tab" onclick="switchCodeTab(this, 'health')">Health</button>
+            </div>
+            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-content" id="code-health">
+<span class="comment"># Check if the agent is running</span>
+<span class="keyword">curl</span> http://localhost:8090/health
+
+<span class="comment"># Response:</span>
+{
+  <span class="property">"status"</span>: <span class="value">"ok"</span>,
+  <span class="property">"version"</span>: <span class="value">"0.1.0"</span>
+}
+          </div>
+          <div class="code-content" id="code-execute">
+<span class="comment"># Execute deployment commands</span>
+<span class="keyword">curl</span> -X POST http://localhost:8090/execute \
+  -H <span class="string">"Authorization: Bearer $AGENT_TOKEN"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{
+    <span class="property">"name"</span>: <span class="value">"Deploy v1.0"</span>,
+    <span class="property">"steps"</span>: [
+      { <span class="property">"name"</span>: <span class="value">"Pull"</span>, <span class="property">"run"</span>: <span class="value">"docker pull app"</span> },
+      { <span class="property">"name"</span>: <span class="value">"Start"</span>, <span class="property">"run"</span>: <span class="value">"docker run -d app"</span> }
+    ]
+  }'</span>
+          </div>
+          <div class="code-content" id="code-chat">
+<span class="comment"># Chat with the AI agent</span>
+<span class="keyword">curl</span> -X POST http://localhost:8090/agent/chat \
+  -H <span class="string">"Authorization: Bearer $AGENT_TOKEN"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{
+    <span class="property">"message"</span>: <span class="value">"Deploy the latest version and notify Slack"</span>
+  }'</span>
+
+<span class="comment"># The AI understands natural language!</span>
+          </div>
+          <div class="code-content active" id="code-docker">
+<span class="comment"># Clone and configure</span>
+<span class="keyword">git</span> clone https://github.com/nullruntime-dev/runner-agent.git
+<span class="keyword">cd</span> runner-agent
+<span class="keyword">cp</span> .env.example .env
+<span class="keyword">nano</span> .env  <span class="comment"># Set AGENT_TOKEN and GOOGLE_AI_API_KEY</span>
+
+<span class="comment"># Production (pre-built images)</span>
+<span class="keyword">docker</span> compose -f docker-compose.prod.yml up -d
+
+<span class="comment"># Or local dev (build from source)</span>
+<span class="keyword">docker</span> compose -f docker-compose.local.yml up --build -d
+
+<span class="comment"># View logs</span>
+<span class="keyword">docker</span> compose -f docker-compose.prod.yml logs -f
+          </div>
+          <div class="code-content" id="code-jar">
+<span class="comment"># Clone and build</span>
+<span class="keyword">git</span> clone https://github.com/nullruntime-dev/runner-agent.git
+<span class="keyword">cd</span> runner-agent
+<span class="keyword">./gradlew</span> bootJar
+
+<span class="comment"># Run the agent (requires Java 21+)</span>
+<span class="keyword">AGENT_TOKEN</span>=your-secret-token \
+<span class="keyword">GOOGLE_AI_API_KEY</span>=your-key \
+<span class="keyword">java</span> -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar
+
+<span class="comment"># Start the UI (separate terminal)</span>
+<span class="keyword">cd</span> ui && npm install && npm run dev
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header reveal">
+        <div class="section-tag">How it works</div>
+        <h2 class="section-title">Three steps to automation</h2>
+        <p class="section-subtitle">Get up and running in minutes.</p>
+      </div>
+      <div class="steps-container">
+        <div class="step reveal">
+          <div class="step-number">1</div>
+          <h3>Deploy the Agent</h3>
+          <p>Run the Docker container on your server or use the standalone JAR. Set your API token.</p>
+        </div>
+        <div class="step reveal reveal-delay-1">
+          <div class="step-number">2</div>
+          <h3>Configure & Create Skills</h3>
+          <p>Enable built-in skills like Slack and Gmail, or create your own custom skills through chat.</p>
+        </div>
+        <div class="step reveal reveal-delay-2">
+          <div class="step-number">3</div>
+          <h3>Start Deploying</h3>
+          <p>POST commands to the API, use the chat interface, or trigger from your CI/CD pipeline.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Code section -->
+  <section class="code-section">
+    <div class="container">
+      <div class="code-container">
+        <div class="code-info reveal">
+          <h2>Simple API,<br>powerful results</h2>
+          <p>Execute multi-step deployments with a single HTTP request. Each step runs sequentially with full output capture.</p>
+          <div class="code-features">
+            <div class="code-feature">
+              <div class="code-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <span>Sequential step execution</span>
+            </div>
+            <div class="code-feature">
+              <div class="code-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <span>Real-time log streaming</span>
+            </div>
+            <div class="code-feature">
+              <div class="code-feature-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <span>Automatic rollback on failure</span>
+            </div>
+          </div>
+          <a href="#getting-started" class="btn btn-outline">View Full Docs</a>
+        </div>
+        <div class="code-block reveal reveal-delay-1">
+          <div class="code-header">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchApiTab(this, 'curl')">curl</button>
+              <button class="code-tab" onclick="switchApiTab(this, 'javascript')">JavaScript</button>
+              <button class="code-tab" onclick="switchApiTab(this, 'python')">Python</button>
+            </div>
+            <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="code-content active" id="api-curl">
+<span class="comment"># Deploy with a single command</span>
+<span class="keyword">curl</span> -X POST http://agent:8090/execute \
+  -H <span class="string">"Authorization: Bearer $TOKEN"</span> \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{
+    <span class="property">"name"</span>: <span class="value">"Deploy v1.2.0"</span>,
+    <span class="property">"steps"</span>: [
+      { <span class="property">"name"</span>: <span class="value">"Pull"</span>, <span class="property">"run"</span>: <span class="value">"docker pull app:latest"</span> },
+      { <span class="property">"name"</span>: <span class="value">"Stop"</span>, <span class="property">"run"</span>: <span class="value">"docker stop app"</span> },
+      { <span class="property">"name"</span>: <span class="value">"Start"</span>, <span class="property">"run"</span>: <span class="value">"docker run -d app"</span> },
+      { <span class="property">"name"</span>: <span class="value">"Health"</span>, <span class="property">"run"</span>: <span class="value">"curl localhost/health"</span> }
+    ]
+  }'</span>
+          </div>
+          <div class="code-content" id="api-javascript">
+<span class="comment">// Deploy with fetch API</span>
+<span class="keyword">const</span> response = <span class="keyword">await</span> fetch(<span class="string">'http://agent:8090/execute'</span>, {
+  <span class="property">method</span>: <span class="string">'POST'</span>,
+  <span class="property">headers</span>: {
+    <span class="string">'Authorization'</span>: <span class="string">`Bearer ${TOKEN}`</span>,
+    <span class="string">'Content-Type'</span>: <span class="string">'application/json'</span>
+  },
+  <span class="property">body</span>: JSON.stringify({
+    <span class="property">name</span>: <span class="string">'Deploy v1.2.0'</span>,
+    <span class="property">steps</span>: [
+      { <span class="property">name</span>: <span class="string">'Pull'</span>, <span class="property">run</span>: <span class="string">'docker pull app:latest'</span> },
+      { <span class="property">name</span>: <span class="string">'Start'</span>, <span class="property">run</span>: <span class="string">'docker run -d app'</span> }
+    ]
+  })
+});
+
+<span class="keyword">const</span> { id, status } = <span class="keyword">await</span> response.json();
+          </div>
+          <div class="code-content" id="api-python">
+<span class="comment"># Deploy with requests</span>
+<span class="keyword">import</span> requests
+
+response = requests.post(
+    <span class="string">'http://agent:8090/execute'</span>,
+    headers={
+        <span class="string">'Authorization'</span>: <span class="string">f'Bearer {TOKEN}'</span>,
+        <span class="string">'Content-Type'</span>: <span class="string">'application/json'</span>
+    },
+    json={
+        <span class="string">'name'</span>: <span class="string">'Deploy v1.2.0'</span>,
+        <span class="string">'steps'</span>: [
+            {<span class="string">'name'</span>: <span class="string">'Pull'</span>, <span class="string">'run'</span>: <span class="string">'docker pull app:latest'</span>},
+            {<span class="string">'name'</span>: <span class="string">'Start'</span>, <span class="string">'run'</span>: <span class="string">'docker run -d app'</span>}
+        ]
+    }
+)
+
+result = response.json()
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <div class="cta-content reveal">
+        <h2>Ready to automate?</h2>
+        <p>Deploy Griphook in minutes. Free, open source, and completely self-hosted.</p>
+        <div class="cta-buttons">
+          <a href="/chat" class="btn btn-primary">
+            Launch App
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a href="https://github.com/nullruntime-dev/runner-agent" target="_blank" class="btn btn-outline">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-logo">
+          <div class="footer-logo-img">
+            <span>G</span>
+          </div>
+          <span>GRIPHOOK</span>
+        </div>
+        <div class="footer-links">
+          <a href="#getting-started">Docs</a>
+          <a href="#skills">Skills</a>
+          <a href="#features">Features</a>
+          <a href="https://github.com/nullruntime-dev/runner-agent" target="_blank">GitHub</a>
+        </div>
+        <div class="footer-copy">
+          &copy; 2026 Griphook. MIT License.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Skill Modals -->
+  <div class="modal-overlay" id="modal-slack" onclick="closeModal(event, 'slack')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: var(--purple);">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+            <path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+            <path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+            <path d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+          </svg>
+          Slack
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('slack')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Send deployment notifications and interact with the agent through Slack. Supports both webhook and Socket Mode for slash commands.</p>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Send deployment success/failure notifications to channels
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Slash commands (/deploy, /status) via Socket Mode
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Direct messages to the bot for AI chat
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              @mention the bot in any channel
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>Configuration</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">App Token (xapp-*)<span class="required">*</span></span>
+              <span class="value">Socket Mode connections</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Bot Token (xoxb-*)<span class="required">*</span></span>
+              <span class="value">API calls & messages</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Webhook URL</span>
+              <span class="value">Alternative to Bot Token</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Default Channel</span>
+              <span class="value">#deployments</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('slack')">Close</button>
+        <a href="/chat" class="btn btn-primary">Configure in App</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-gmail" onclick="closeModal(event, 'gmail')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: var(--red);">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Gmail
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('gmail')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Send emails through Gmail's SMTP server. Perfect for deployment notifications, alerts, and reports.</p>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Send deployment status emails
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Custom email templates via AI
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Uses Gmail App Passwords (secure)
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              TLS encryption via smtp.gmail.com:587
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>Configuration</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">Gmail Address<span class="required">*</span></span>
+              <span class="value">your-email@gmail.com</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">App Password<span class="required">*</span></span>
+              <span class="value">16-character app password</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Default Recipient</span>
+              <span class="value">team@company.com</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('gmail')">Close</button>
+        <a href="/chat" class="btn btn-primary">Configure in App</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-smtp" onclick="closeModal(event, 'smtp')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: var(--orange);">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          SMTP
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('smtp')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Send emails through any SMTP server. Works with SendGrid, Mailgun, Amazon SES, or your own mail server.</p>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Works with any SMTP provider
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              TLS, SSL, or no encryption options
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Custom sender name and address
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Deployment notification templates
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>Configuration</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">SMTP Host<span class="required">*</span></span>
+              <span class="value">smtp.sendgrid.net</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Port<span class="required">*</span></span>
+              <span class="value">587 (TLS) or 465 (SSL)</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Username<span class="required">*</span></span>
+              <span class="value">apikey or email</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Password<span class="required">*</span></span>
+              <span class="value">API key or password</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">From Email<span class="required">*</span></span>
+              <span class="value">deploy@yourdomain.com</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Encryption</span>
+              <span class="value">TLS / SSL / None</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('smtp')">Close</button>
+        <a href="/chat" class="btn btn-primary">Configure in App</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-flirt" onclick="closeModal(event, 'flirt')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: var(--magenta);">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+          Flirt Assistant
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('flirt')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Your AI wingman that learns your style and helps craft the perfect messages. Tracks profiles and adapts to each conversation.</p>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Generate response options (subtle to bold)
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Craft opening messages for any platform
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Profile tracking (interests, personality, style)
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Conversation analysis and tips
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Remembers last 20 messages per profile
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>How to Use</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">Start with</span>
+              <span class="value">"Help me reply to [name]"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Get openers</span>
+              <span class="value">"Write an opener for [name] on Tinder"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Update profile</span>
+              <span class="value">"[name] likes hiking and coffee"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">View profiles</span>
+              <span class="value">"Show my profiles" or "Tell me about [name]"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('flirt')">Close</button>
+        <a href="/chat" class="btn btn-primary">Try it Now</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-gmail-api" onclick="closeModal(event, 'gmail-api')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: var(--blue);">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          Gmail API
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('gmail-api')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Full Gmail access via OAuth2. Read, search, and manage your inbox. Reply to emails and get AI-powered response suggestions.</p>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              List and search emails (from:, subject:, is:unread)
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Read full email content and threads
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Compose and send new emails
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Reply to emails in thread
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              AI analysis with response suggestions
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>Configuration</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">OAuth Client ID<span class="required">*</span></span>
+              <span class="value">From Google Cloud Console</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">OAuth Client Secret<span class="required">*</span></span>
+              <span class="value">From Google Cloud Console</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Authorization</span>
+              <span class="value">One-time OAuth flow in app</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('gmail-api')">Close</button>
+        <a href="/chat" class="btn btn-primary">Configure in App</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-custom" onclick="closeModal(event, 'custom')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header" style="color: #00cc88;">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+          </svg>
+          Custom Skills
+        </h2>
+        <button class="modal-close" onclick="closeSkillModal('custom')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Create your own skills through natural language chat. Define command shortcuts, AI personas, or multi-step workflows that integrate with other skills.</p>
+
+        <div class="modal-section">
+          <h3>Skill Types</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>Command Skills</strong> — Run predefined shell commands
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>Prompt Skills</strong> — Custom AI personas and instructions
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>Workflow Skills</strong> — Multi-step with conditions and branching
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h3>Example Commands</h3>
+          <div class="modal-config">
+            <div class="modal-config-item">
+              <span class="label">Create command skill</span>
+              <span class="value">"Create a skill 'deploy-prod' that runs: git pull && docker-compose up -d"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Create prompt skill</span>
+              <span class="value">"Create a skill that acts as a security-focused code reviewer"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Create workflow</span>
+              <span class="value">"Create a skill that checks health, deploys if OK, alerts Slack if not"</span>
+            </div>
+            <div class="modal-config-item">
+              <span class="label">Run a skill</span>
+              <span class="value">"Run my deploy-prod skill"</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Features</h3>
+          <ul>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Create skills through natural language
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Skills persist across sessions
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Enable/disable skills on demand
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Track execution counts
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Workflows can call other skills (Slack, Gmail, etc.)
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSkillModal('custom')">Close</button>
+        <a href="/chat" class="btn btn-primary">Start Building</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Mobile menu
+    function toggleMobileMenu() {
+      const menu = document.getElementById('mobileMenu');
+      const menuIcon = document.getElementById('menuIcon');
+      const closeIcon = document.getElementById('closeIcon');
+      const body = document.body;
+
+      const isOpen = menu.classList.contains('open');
+
+      if (isOpen) {
+        menu.classList.remove('open');
+        body.classList.remove('menu-open');
+        menuIcon.style.display = 'block';
+        closeIcon.style.display = 'none';
+      } else {
+        menu.classList.add('open');
+        body.classList.add('menu-open');
+        menuIcon.style.display = 'none';
+        closeIcon.style.display = 'block';
+      }
+    }
+
+    function closeMobileMenu() {
+      const menu = document.getElementById('mobileMenu');
+      const menuIcon = document.getElementById('menuIcon');
+      const closeIcon = document.getElementById('closeIcon');
+      const body = document.body;
+
+      menu.classList.remove('open');
+      body.classList.remove('menu-open');
+      menuIcon.style.display = 'block';
+      closeIcon.style.display = 'none';
+    }
+
+    // Skill modals
+    function openSkillModal(skill) {
+      const modal = document.getElementById(`modal-${skill}`);
+      modal.classList.add('open');
+      document.body.classList.add('modal-open');
+    }
+
+    function closeSkillModal(skill) {
+      const modal = document.getElementById(`modal-${skill}`);
+      modal.classList.remove('open');
+      document.body.classList.remove('modal-open');
+    }
+
+    function closeModal(event, skill) {
+      if (event.target.classList.contains('modal-overlay')) {
+        closeSkillModal(skill);
+      }
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(modal => {
+          modal.classList.remove('open');
+        });
+        document.body.classList.remove('modal-open');
+        closeMobileMenu();
+      }
+    });
+
+    // Reveal on scroll
+    const revealElements = document.querySelectorAll('.reveal');
+
+    const revealOnScroll = () => {
+      revealElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const isVisible = rect.top < window.innerHeight - 100;
+        if (isVisible) {
+          el.classList.add('visible');
+        }
+      });
+    };
+
+    revealOnScroll();
+    window.addEventListener('scroll', revealOnScroll);
+
+    // Smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Code tabs (Getting Started section)
+    function switchCodeTab(btn, tabId) {
+      const codeBlock = btn.closest('.code-block');
+      codeBlock.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      codeBlock.querySelectorAll('.code-content').forEach(c => c.classList.remove('active'));
+
+      btn.classList.add('active');
+      document.getElementById(`code-${tabId}`).classList.add('active');
+    }
+
+    // API tabs (Code section)
+    function switchApiTab(btn, tabId) {
+      const codeBlock = btn.closest('.code-block');
+      codeBlock.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      codeBlock.querySelectorAll('.code-content').forEach(c => c.classList.remove('active'));
+
+      btn.classList.add('active');
+      document.getElementById(`api-${tabId}`).classList.add('active');
+    }
+
+    // Copy code
+    function copyCode(btn) {
+      const codeBlock = btn.closest('.code-block');
+      const activeContent = codeBlock.querySelector('.code-content.active');
+      const code = activeContent.textContent;
+
+      navigator.clipboard.writeText(code).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.color = 'var(--lime)';
+        btn.style.borderColor = 'var(--lime)';
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.color = '';
+          btn.style.borderColor = '';
+        }, 2000);
+      });
+    }
+
+    // Parallax orbs on mouse move
+    document.addEventListener('mousemove', (e) => {
+      const orbs = document.querySelectorAll('.orb');
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+
+      orbs.forEach((orb, i) => {
+        const speed = (i + 1) * 20;
+        const xOffset = (x - 0.5) * speed;
+        const yOffset = (y - 0.5) * speed;
+        orb.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
+      });
+    });
+
+    // Terminal typing effect enhancement
+    const terminalLines = document.querySelectorAll('.terminal-line');
+
+    const observeTerminal = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          terminalLines.forEach((line, i) => {
+            line.style.animationPlayState = 'running';
+          });
+        }
+      });
+    }, { threshold: 0.5 });
+
+    const terminal = document.querySelector('.terminal');
+    if (terminal) {
+      observeTerminal.observe(terminal);
+    }
+  </script>
+</body>
+</html>

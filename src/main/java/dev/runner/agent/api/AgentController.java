@@ -1,0 +1,119 @@
+  /*
+   * Copyright 2024-2026 Hamim Alam
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *     http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   */
+  package dev.runner.agent.api;
+
+import com.google.adk.events.Event;
+import dev.runner.agent.adk.AgentService;
+import dev.runner.agent.dto.ChatRequest;
+import dev.runner.agent.dto.ChatResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@Slf4j
+@RestController
+@RequestMapping("/agent")
+@RequiredArgsConstructor
+@Validated
+@ConditionalOnBean(AgentService.class)
+public class AgentController {
+
+    private final AgentService agentService;
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+
+    @PostMapping("/chat")
+    public ResponseEntity<ChatResponse> chat(@RequestBody @Validated ChatRequest request) {
+        log.info("POST /agent/chat sessionId={}", request.getSessionId());
+
+        AgentService.ChatResult result = agentService.chat(request.getSessionId(), request.getMessage());
+
+        ChatResponse response = new ChatResponse(result.sessionId(), result.response());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(
+            @RequestParam(required = false) String sessionId,
+            @RequestParam String message
+    ) {
+        log.info("GET /agent/chat/stream sessionId={}", sessionId);
+
+        String actualSessionId = agentService.getSessionId(sessionId);
+        SseEmitter emitter = new SseEmitter(300000L); // 5 minute timeout
+
+        executorService.submit(() -> {
+            try {
+                agentService.chatStream(actualSessionId, message)
+                        .blockingForEach(event -> {
+                            try {
+                                sendEvent(emitter, event, actualSessionId);
+                            } catch (IOException e) {
+                                log.warn("Failed to send SSE event: {}", e.getMessage());
+                            }
+                        });
+
+                emitter.complete();
+            } catch (Exception e) {
+                log.error("Error in chat stream: {}", e.getMessage(), e);
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
+    @DeleteMapping("/session/{sessionId}")
+    public ResponseEntity<Void> clearSession(@PathVariable String sessionId) {
+        log.info("DELETE /agent/session/{}", sessionId);
+        agentService.clearSession(sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    private void sendEvent(SseEmitter emitter, Event event, String sessionId) throws IOException {
+        String content = event.stringifyContent();
+
+        // Log event details for debugging
+        log.debug("SSE event sessionId={} finalResponse={} contentLength={}",
+                sessionId,
+                event.finalResponse(),
+                content != null ? content.length() : 0);
+
+        // Send events that have content
+        // We send all content, not just finalResponse, to enable proper streaming
+        if (content != null && !content.isBlank()) {
+            // Skip tool call JSON responses (they typically contain function_call or tool markers)
+            if (content.startsWith("{") && (content.contains("\"function_call\"") || content.contains("\"tool_calls\""))) {
+                log.debug("Skipping tool call event");
+                return;
+            }
+
+            SseEmitter.SseEventBuilder builder = SseEmitter.event()
+                    .name("message")
+                    .data(content);
+
+            emitter.send(builder);
+        }
+    }
+}

@@ -1,0 +1,100 @@
+services:
+  # Backend - Java/Spring Boot Agent
+  agent:
+    image: nullruntimedev/griphook/agent:latest
+    container_name: griphook-agent
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - agent-data:/app/data
+    environment:
+      # ===================
+      # Core Configuration
+      # ===================
+      - AGENT_TOKEN=${AGENT_TOKEN:-1234}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - AGENT_ADK_MODEL=${AGENT_ADK_MODEL:-gemini-2.0-flash}
+      - AGENT_ADK_ENABLED=${AGENT_ADK_ENABLED:-true}
+      - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-/tmp}
+      - AGENT_DEFAULT_SHELL=${AGENT_DEFAULT_SHELL:-/bin/sh}
+      - AGENT_MAX_CONCURRENT=${AGENT_MAX_CONCURRENT:-5}
+      - SPRING_PROFILES_ACTIVE=production
+      - SPRING_DATASOURCE_URL=jdbc:h2:file:/app/data/agent-data
+      - H2_CONSOLE_ENABLED=${H2_CONSOLE_ENABLED:-false}
+      - JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC
+
+      # ===================
+      # Slack Skill
+      # ===================
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SLACK_DEFAULT_CHANNEL=${SLACK_DEFAULT_CHANNEL:-}
+      - SLACK_SLASH_COMMAND=${SLACK_SLASH_COMMAND:-}
+
+      # ===================
+      # Gmail SMTP Skill
+      # ===================
+      - GMAIL_EMAIL=${GMAIL_EMAIL:-}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
+      - GMAIL_DEFAULT_RECIPIENT=${GMAIL_DEFAULT_RECIPIENT:-}
+
+      # ===================
+      # Gmail API Skill (OAuth2)
+      # ===================
+      - GMAIL_API_CLIENT_ID=${GMAIL_API_CLIENT_ID:-}
+      - GMAIL_API_CLIENT_SECRET=${GMAIL_API_CLIENT_SECRET:-}
+
+      # ===================
+      # SMTP Skill
+      # ===================
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-}
+      - SMTP_ENCRYPTION=${SMTP_ENCRYPTION:-TLS}
+      - SMTP_DEFAULT_RECIPIENT=${SMTP_DEFAULT_RECIPIENT:-}
+
+      # ===================
+      # Flirt Assistant Skill
+      # ===================
+      - FLIRT_USER_NAME=${FLIRT_USER_NAME:-}
+      - FLIRT_STYLE=${FLIRT_STYLE:-playful}
+      - FLIRT_INTERESTED_IN=${FLIRT_INTERESTED_IN:-}
+      - FLIRT_PERSONALITY=${FLIRT_PERSONALITY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Frontend - Next.js UI
+  ui:
+    image: nullruntimedev/griphook/ui:latest
+    container_name: griphook-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ui-data:/app/data
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      agent:
+        condition: service_healthy
+
+volumes:
+  agent-data:
+    driver: local
+  ui-data:
+    driver: local

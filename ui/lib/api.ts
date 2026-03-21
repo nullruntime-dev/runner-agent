@@ -95,3 +95,240 @@ export async function cancelExecution(agentId: string, executionId: string): Pro
 export function getLogsStreamUrl(agentId: string, executionId: string): string {
   return `/api/agents/${agentId}/executions/${executionId}/logs`;
 }
+
+// Chat types and functions
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface ChatRequest {
+  sessionId?: string;
+  message: string;
+}
+
+export interface ChatResponse {
+  sessionId: string;
+  response: string;
+}
+
+export async function sendChatMessage(
+  agentId: string,
+  message: string,
+  sessionId?: string
+): Promise<ChatResponse> {
+  const res = await fetch(`/api/agents/${agentId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sessionId }),
+  });
+  if (!res.ok) throw new Error('Failed to send chat message');
+  return res.json();
+}
+
+export function getChatStreamUrl(agentId: string, sessionId: string, message: string): string {
+  return `/api/agents/${agentId}/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`;
+}
+
+// Skill types and functions
+
+export interface SkillConfigField {
+  name: string;
+  label: string;
+  type: 'text' | 'password' | 'url' | 'select';
+  description: string;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
+export interface Skill {
+  name: string;
+  displayName: string;
+  description: string;
+  icon: string;
+  configFields: SkillConfigField[];
+  configured: boolean;
+  enabled: boolean;
+}
+
+export async function getSkills(agentId: string): Promise<Skill[]> {
+  const res = await fetch(`/api/agents/${agentId}/skills`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch skills');
+  return res.json();
+}
+
+export async function configureSkill(
+  agentId: string,
+  skillName: string,
+  config: Record<string, string>,
+  enabled: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}/configure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config, enabled }),
+  });
+  return res.json();
+}
+
+export async function deactivateSkill(
+  agentId: string,
+  skillName: string
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}`, {
+    method: 'DELETE',
+  });
+  return res.json();
+}
+
+// Gmail API OAuth types and functions
+
+export interface GmailAuthStatus {
+  configured: boolean;
+  authorized: boolean;
+  email: string;
+  ready: boolean;
+}
+
+export interface GmailAuthUrl {
+  authUrl: string;
+  redirectUri: string;
+  message: string;
+}
+
+export async function getGmailAuthStatus(agentId: string): Promise<GmailAuthStatus> {
+  const res = await fetch(`/api/agents/${agentId}/gmail/status`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch Gmail auth status');
+  return res.json();
+}
+
+export async function getGmailAuthUrl(agentId: string): Promise<GmailAuthUrl> {
+  const res = await fetch(`/api/agents/${agentId}/gmail/auth-url`, { cache: 'no-store' });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || 'Failed to get Gmail auth URL');
+  }
+  return res.json();
+}
+
+export async function revokeGmailAuth(agentId: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/agents/${agentId}/gmail/revoke`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to revoke Gmail auth');
+  return res.json();
+}
+
+// Custom Skill types and functions
+
+export type CustomSkillType = 'COMMAND' | 'PROMPT' | 'WORKFLOW';
+
+export interface CustomSkill {
+  id: number;
+  name: string;
+  displayName: string;
+  description: string;
+  type: CustomSkillType;
+  definitionJson: string;
+  icon: string;
+  enabled: boolean;
+  executionCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateCustomSkillRequest {
+  name: string;
+  displayName?: string;
+  description: string;
+  type: CustomSkillType;
+  definitionJson: string;
+  icon?: string;
+}
+
+export interface UpdateCustomSkillRequest {
+  displayName?: string;
+  description?: string;
+  definitionJson?: string;
+  icon?: string;
+}
+
+export interface RunCustomSkillRequest {
+  input?: string;
+  params?: Record<string, unknown>;
+}
+
+export async function getCustomSkills(agentId: string): Promise<CustomSkill[]> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch custom skills');
+  return res.json();
+}
+
+export async function getCustomSkill(agentId: string, name: string): Promise<CustomSkill> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch custom skill');
+  return res.json();
+}
+
+export async function createCustomSkill(
+  agentId: string,
+  skill: CreateCustomSkillRequest
+): Promise<{ success: boolean; skill?: CustomSkill; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(skill),
+  });
+  return res.json();
+}
+
+export async function updateCustomSkill(
+  agentId: string,
+  name: string,
+  updates: UpdateCustomSkillRequest
+): Promise<{ success: boolean; skill?: CustomSkill; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return res.json();
+}
+
+export async function deleteCustomSkill(
+  agentId: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, {
+    method: 'DELETE',
+  });
+  return res.json();
+}
+
+export async function toggleCustomSkill(
+  agentId: string,
+  name: string,
+  enabled: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  return res.json();
+}
+
+export async function runCustomSkill(
+  agentId: string,
+  name: string,
+  request?: RunCustomSkillRequest
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request || {}),
+  });
+  return res.json();
+}

@@ -35,17 +35,17 @@ export default function DeleteAgentButton({ agentId, agentName }: DeleteAgentBut
   if (confirming) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-neutral-500">Delete {agentName}?</span>
+        <span className="text-xs text-[#888]">Delete {agentName}?</span>
         <button
           onClick={handleDelete}
           disabled={loading}
-          className="h-7 px-2 bg-red-900 hover:bg-red-800 border border-red-800 text-red-200 text-xs font-medium transition-colors disabled:opacity-50"
+          className="h-7 px-2 bg-[#ff0044]/20 hover:bg-[#ff0044]/30 border border-[#ff0044]/30 text-[#ff0044] text-xs font-medium transition-colors disabled:opacity-50"
         >
           {loading ? '...' : 'YES'}
         </button>
         <button
           onClick={() => setConfirming(false)}
-          className="h-7 px-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 text-xs font-medium transition-colors"
+          className="h-7 px-2 bg-[#111] hover:bg-[#1a1a1a] border border-[#2a2a2a] text-[#888] text-xs font-medium transition-colors"
         >
           NO
         </button>
@@ -56,7 +56,7 @@ export default function DeleteAgentButton({ agentId, agentName }: DeleteAgentBut
   return (
     <button
       onClick={() => setConfirming(true)}
-      className="h-8 px-3 bg-neutral-800 hover:bg-red-900 border border-neutral-700 hover:border-red-800 text-neutral-400 hover:text-red-200 text-xs font-medium transition-colors"
+      className="h-8 px-3 bg-[#111] hover:bg-[#ff0044]/20 border border-[#2a2a2a] hover:border-[#ff0044]/30 text-[#888] hover:text-[#ff0044] text-xs font-medium transition-colors"
     >
       DELETE
     </button>

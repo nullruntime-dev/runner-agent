@@ -1,55 +1,108 @@
-import Link from 'next/link';
 import { CodeBlock } from '../components';
 
 export default function DeploymentPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold text-white mb-4">Deployment</h1>
-      <p className="text-neutral-400 mb-8">
-        Deploy Runner Agent in production environments.
+      <p className="text-[#888] mb-8">
+        Deploy GRIPHOOK in production environments using Docker Compose, standalone JAR, or systemd services.
       </p>
 
-      {/* Agent Download Section */}
-      <h2 className="text-xl font-bold text-white mb-4">Agent: Download JAR</h2>
-      <p className="text-neutral-400 mb-4">
-        Download the pre-built JAR file and run it directly with Java 21+.
+      {/* Docker Compose Production */}
+      <h2 className="text-xl font-bold text-white mb-4">Docker Compose (Recommended)</h2>
+      <p className="text-[#888] mb-4">
+        The easiest way to deploy both the agent and UI together.
       </p>
 
-      <div className="bg-neutral-900 border border-neutral-800 p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-sm font-semibold text-white">runner-agent.jar</div>
-            <div className="text-xs text-neutral-500 mt-1">Requires Java 21 or higher</div>
-          </div>
-          <Link
-            href="/api/download/agent"
-            className="h-10 px-6 bg-white hover:bg-neutral-200 text-neutral-900 text-sm font-semibold transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            DOWNLOAD JAR
-          </Link>
-        </div>
-        <div className="text-xs text-neutral-600">
-          Verify: <code className="text-neutral-500">curl -s /api/download/agent/checksum</code>
-        </div>
-      </div>
-
+      <h3 className="text-md font-medium text-[#ccc] mb-3">Production (pre-built images)</h3>
       <CodeBlock language="bash">
-{`# Download
-curl -o runner-agent.jar http://control-center:3000/api/download/agent
+{`# Clone the repository
+git clone https://github.com/nullruntime-dev/runner-agent.git
+cd runner-agent
 
-# Run
-AGENT_TOKEN=your-secret-token java -jar runner-agent.jar
+# Configure environment
+cp .env.example .env
+nano .env  # Set AGENT_TOKEN, GOOGLE_AI_API_KEY, and other options
 
-# Run with options
-AGENT_TOKEN=your-secret-token java -jar runner-agent.jar \\
-  --server.port=8090 \\
-  --agent.working-dir=/opt/workspace`}
+# Deploy with pre-built images
+docker compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Stop services
+docker compose -f docker-compose.prod.yml down`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-neutral-200 mb-3 mt-6">Install Java 21</h3>
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Local Development (build from source)</h3>
+      <CodeBlock language="bash">
+{`# Build and run locally
+docker compose -f docker-compose.local.yml up --build -d
+
+# Rebuild after code changes
+docker compose -f docker-compose.local.yml up --build -d`}
+      </CodeBlock>
+
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Docker Compose Services</h3>
+      <div className="overflow-x-auto mb-8">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#1a1a1a]">
+              <th className="text-left py-3 px-4 text-[#888]">Service</th>
+              <th className="text-left py-3 px-4 text-[#888]">Port</th>
+              <th className="text-left py-3 px-4 text-[#888]">Image</th>
+              <th className="text-left py-3 px-4 text-[#888]">Description</th>
+            </tr>
+          </thead>
+          <tbody className="text-[#ccc]">
+            <tr className="border-b border-[#1a1a1a]">
+              <td className="py-3 px-4"><code className="text-[#00fff2]">agent</code></td>
+              <td className="py-3 px-4">8090</td>
+              <td className="py-3 px-4"><code>nullruntimedev/griphook/agent</code></td>
+              <td className="py-3 px-4">Backend API + AI agent (Spring Boot)</td>
+            </tr>
+            <tr className="border-b border-[#1a1a1a]">
+              <td className="py-3 px-4"><code className="text-[#00fff2]">ui</code></td>
+              <td className="py-3 px-4">3000</td>
+              <td className="py-3 px-4"><code>nullruntimedev/griphook/ui</code></td>
+              <td className="py-3 px-4">Frontend dashboard (Next.js)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Standalone JAR */}
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Standalone JAR</h2>
+      <p className="text-[#888] mb-4">
+        Build and run the backend as a standalone JAR file. Requires Java 21+.
+      </p>
+
+      <h3 className="text-md font-medium text-[#ccc] mb-3">Build the JAR</h3>
+      <CodeBlock language="bash">
+{`# Clone and build
+git clone https://github.com/nullruntime-dev/runner-agent.git
+cd runner-agent
+./gradlew bootJar
+
+# JAR is created at:
+# build/libs/runner-agent-0.1.0-SNAPSHOT.jar`}
+      </CodeBlock>
+
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Run the JAR</h3>
+      <CodeBlock language="bash">
+{`# Basic run
+AGENT_TOKEN=your-secret-token \\
+GOOGLE_AI_API_KEY=your-google-ai-key \\
+java -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar
+
+# With custom options
+java -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar \\
+  --server.port=8090 \\
+  --agent.working-dir=/opt/workspace \\
+  --agent.default-shell=/bin/bash`}
+      </CodeBlock>
+
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Install Java 21</h3>
       <CodeBlock language="bash">
 {`# Ubuntu/Debian
 sudo apt update && sudo apt install -y openjdk-21-jre-headless
@@ -64,101 +117,86 @@ sudo pacman -S jre21-openjdk-headless
 brew install openjdk@21`}
       </CodeBlock>
 
-      {/* Agent systemd */}
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Agent: systemd Service</h2>
-      <CodeBlock language="bash">
-{`# Download and install
-sudo mkdir -p /opt/runner-agent
-cd /opt/runner-agent
-sudo curl -o runner-agent.jar http://control-center:3000/api/download/agent
+      {/* systemd Service */}
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">systemd Service</h2>
+      <p className="text-[#888] mb-4">
+        Run the agent as a systemd service for automatic startup and restart.
+      </p>
 
-# Create user
-sudo useradd -r -s /bin/false runner
-sudo chown -R runner:runner /opt/runner-agent`}
+      <h3 className="text-md font-medium text-[#ccc] mb-3">Install the agent</h3>
+      <CodeBlock language="bash">
+{`# Create directory and copy JAR
+sudo mkdir -p /opt/griphook-agent
+sudo cp build/libs/runner-agent-0.1.0-SNAPSHOT.jar /opt/griphook-agent/griphook-agent.jar
+
+# Create service user
+sudo useradd -r -s /bin/false griphook
+sudo chown -R griphook:griphook /opt/griphook-agent`}
       </CodeBlock>
 
-      <CodeBlock language="ini" className="mt-4">
-{`# /etc/systemd/system/runner-agent.service
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Create systemd unit file</h3>
+      <CodeBlock language="ini">
+{`# /etc/systemd/system/griphook-agent.service
 [Unit]
-Description=Runner Agent
+Description=GRIPHOOK Agent
 After=network.target
 
 [Service]
 Type=simple
-User=runner
-WorkingDirectory=/opt/runner-agent
-ExecStart=/usr/bin/java -jar runner-agent.jar
+User=griphook
+WorkingDirectory=/opt/griphook-agent
+ExecStart=/usr/bin/java -Xmx512m -jar griphook-agent.jar
 Restart=always
 RestartSec=5
 Environment=AGENT_TOKEN=your-secret-token
+Environment=GOOGLE_AI_API_KEY=your-google-ai-key
+Environment=AGENT_WORKING_DIR=/opt/griphook-agent/workspace
 
 [Install]
 WantedBy=multi-user.target`}
       </CodeBlock>
 
-      <CodeBlock language="bash" className="mt-4">
-{`sudo systemctl daemon-reload
-sudo systemctl enable runner-agent
-sudo systemctl start runner-agent`}
-      </CodeBlock>
-
-      {/* Agent Docker */}
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Agent: Docker</h2>
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Enable and start</h3>
       <CodeBlock language="bash">
-{`docker run -d \\
-  --name runner-agent \\
-  -e AGENT_TOKEN=your-secret-token \\
-  -p 8090:8090 \\
-  -v /opt/agent-data:/app \\
-  runner-agent`}
+{`sudo systemctl daemon-reload
+sudo systemctl enable griphook-agent
+sudo systemctl start griphook-agent
+
+# Check status
+sudo systemctl status griphook-agent
+
+# View logs
+sudo journalctl -u griphook-agent -f`}
       </CodeBlock>
 
-      {/* Control Center Docker */}
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Control Center: Docker</h2>
-      <CodeBlock language="dockerfile">
-{`FROM node:22-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npx prisma generate
-RUN npm run build
+      {/* UI Deployment */}
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">UI Deployment (Next.js)</h2>
+      <p className="text-[#888] mb-4">
+        Deploy the UI separately if not using Docker Compose.
+      </p>
 
-FROM node:22-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-RUN mkdir -p /app/data
-EXPOSE 3000
-CMD ["node", "server.js"]`}
+      <h3 className="text-md font-medium text-[#ccc] mb-3">Build for production</h3>
+      <CodeBlock language="bash">
+{`cd ui
+npm install
+npm run build
+
+# Start production server
+npm run start`}
       </CodeBlock>
 
-      <CodeBlock language="bash" className="mt-4">
-{`docker build -t runner-control-center .
-
-docker run -d \\
-  --name control-center \\
-  -p 3000:3000 \\
-  -v /opt/runner-data:/app/data \\
-  runner-control-center`}
-      </CodeBlock>
-
-      {/* Control Center systemd */}
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Control Center: systemd</h2>
+      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">UI systemd service</h3>
       <CodeBlock language="ini">
-{`# /etc/systemd/system/runner-control-center.service
+{`# /etc/systemd/system/griphook-ui.service
 [Unit]
-Description=Runner Agent Control Center
+Description=GRIPHOOK UI
 After=network.target
 
 [Service]
 Type=simple
-User=runner
-WorkingDirectory=/opt/runner-ui
-ExecStart=/usr/bin/node .next/standalone/server.js
+User=griphook
+WorkingDirectory=/opt/griphook-ui
+ExecStart=/usr/bin/npm run start
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
@@ -168,17 +206,58 @@ Environment=PORT=3000
 WantedBy=multi-user.target`}
       </CodeBlock>
 
-      <CodeBlock language="bash" className="mt-4">
-{`# Build and deploy
-npm run build
-sudo cp -r .next/standalone /opt/runner-ui
-sudo cp -r .next/static /opt/runner-ui/.next/static
-sudo cp -r public /opt/runner-ui/public
-sudo mkdir -p /opt/runner-ui/data
+      {/* Reverse Proxy */}
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Reverse Proxy (nginx)</h2>
+      <p className="text-[#888] mb-4">
+        Example nginx configuration for production with SSL.
+      </p>
+      <CodeBlock language="nginx">
+{`server {
+    listen 443 ssl http2;
+    server_name griphook.example.com;
 
-sudo systemctl daemon-reload
-sudo systemctl enable runner-control-center
-sudo systemctl start runner-control-center`}
+    ssl_certificate /etc/letsencrypt/live/griphook.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/griphook.example.com/privkey.pem;
+
+    # UI (Next.js)
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Agent API
+    location /api/agent/ {
+        proxy_pass http://localhost:8090/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # SSE streaming (logs)
+    location /api/agent/executions/ {
+        proxy_pass http://localhost:8090/executions/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+    }
+}`}
+      </CodeBlock>
+
+      {/* Health Checks */}
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Health Checks</h2>
+      <CodeBlock language="bash">
+{`# Agent health
+curl http://localhost:8090/health
+# {"status":"ok","version":"0.1.0"}
+
+# Docker Compose health (built-in)
+docker compose -f docker-compose.prod.yml ps`}
       </CodeBlock>
     </div>
   );

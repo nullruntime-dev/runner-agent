@@ -15,7 +15,7 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
 
   return (
     <span
-      className={`px-2 py-1 text-xs font-medium rounded border ${
+      className={`px-2 py-1 text-xs font-medium  border ${
         styles[status] || 'bg-gray-100 text-gray-800'
       }`}
     >

@@ -64,21 +64,21 @@ export default function LogViewer({ logsUrl, steps, selectedStep, isComplete }: 
     : null;
 
   return (
-    <div className="flex-1 flex flex-col bg-neutral-950 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#050505] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#0a0a0a] border-b border-[#1a1a1a]">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+          <span className="text-xs font-semibold text-[#888] uppercase tracking-wider">
             {selectedStep !== null ? steps[selectedStep]?.name : 'Output Log'}
           </span>
           {!isComplete && connected && (
-            <span className="flex items-center gap-1.5 text-xs text-amber-500">
-              <span className="w-1.5 h-1.5 bg-amber-500 animate-pulse" />
+            <span className="flex items-center gap-1.5 text-xs text-[#ff6600]">
+              <span className="w-1.5 h-1.5 bg-[#ff6600] animate-pulse" />
               LIVE
             </span>
           )}
         </div>
-        <span className="font-mono text-xs text-neutral-600">
+        <span className="font-mono text-xs text-[#444]">
           {filteredLogs.length} lines
         </span>
       </div>
@@ -92,35 +92,35 @@ export default function LogViewer({ logsUrl, steps, selectedStep, isComplete }: 
         {selectedStep === null ? (
           groupedLogs?.map(({ step, logs: stepLogs }, groupIndex) => (
             <div key={step.id || groupIndex}>
-              <div className="sticky top-0 bg-neutral-900 border-y border-neutral-800 px-4 py-2 flex items-center gap-3">
-                <span className="text-neutral-600">#{step.stepIndex + 1}</span>
-                <span className="text-neutral-300 font-medium">{step.name}</span>
+              <div className="sticky top-0 bg-[#0a0a0a] border-y border-[#1a1a1a] px-4 py-2 flex items-center gap-3">
+                <span className="text-[#444]">#{step.stepIndex + 1}</span>
+                <span className="text-white font-medium">{step.name}</span>
                 <div className="flex-1" />
                 {step.status === 'SUCCESS' && (
-                  <span className="text-green-500 text-xs">PASSED</span>
+                  <span className="text-[#00ff66] text-xs">PASSED</span>
                 )}
                 {step.status === 'FAILED' && (
-                  <span className="text-red-500 text-xs">FAILED</span>
+                  <span className="text-[#ff0044] text-xs">FAILED</span>
                 )}
                 {step.status === 'RUNNING' && (
-                  <span className="text-amber-500 text-xs animate-pulse">RUNNING</span>
+                  <span className="text-[#ff6600] text-xs animate-pulse">RUNNING</span>
                 )}
                 {(!step.status || step.status === 'PENDING') && (
-                  <span className="text-neutral-600 text-xs">PENDING</span>
+                  <span className="text-[#444] text-xs">PENDING</span>
                 )}
               </div>
               <div className="px-4 py-2">
                 {stepLogs.length === 0 ? (
-                  <div className="text-neutral-600 py-2">
+                  <div className="text-[#444] py-2">
                     {step.status === 'PENDING' ? 'Waiting to start...' : 'No output'}
                   </div>
                 ) : (
                   stepLogs.map((log, index) => (
-                    <div key={log.id || index} className="flex hover:bg-neutral-900">
-                      <span className="text-neutral-700 select-none w-10 text-right pr-3 flex-shrink-0">
+                    <div key={log.id || index} className="flex hover:bg-[#0a0a0a]">
+                      <span className="text-[#2a2a2a] select-none w-10 text-right pr-3 flex-shrink-0">
                         {index + 1}
                       </span>
-                      <span className="text-neutral-300 whitespace-pre-wrap break-all">
+                      <span className="text-white whitespace-pre-wrap break-all">
                         {log.line}
                       </span>
                     </div>
@@ -132,16 +132,16 @@ export default function LogViewer({ logsUrl, steps, selectedStep, isComplete }: 
         ) : (
           <div className="p-4">
             {filteredLogs.length === 0 ? (
-              <div className="text-neutral-600 py-8 text-center">
+              <div className="text-[#444] py-8 text-center">
                 {isComplete ? 'No output for this step' : 'Waiting for output...'}
               </div>
             ) : (
               filteredLogs.map((log, index) => (
-                <div key={log.id || index} className="flex hover:bg-neutral-900">
-                  <span className="text-neutral-700 select-none w-10 text-right pr-3 flex-shrink-0">
+                <div key={log.id || index} className="flex hover:bg-[#0a0a0a]">
+                  <span className="text-[#2a2a2a] select-none w-10 text-right pr-3 flex-shrink-0">
                     {index + 1}
                   </span>
-                  <span className="text-neutral-300 whitespace-pre-wrap break-all">
+                  <span className="text-white whitespace-pre-wrap break-all">
                     {log.line}
                   </span>
                 </div>

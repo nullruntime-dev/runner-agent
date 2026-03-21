@@ -1,15 +1,19 @@
 server:
-  port: 8090
+  port: ${SERVER_PORT:8090}
 
 agent:
-  token: ${AGENT_TOKEN}
-  working-dir: /tmp
-  default-shell: /bin/sh
-  max-concurrent: 5
+  token: ${AGENT_TOKEN:1234}
+  working-dir: ${AGENT_WORKING_DIR:/tmp}
+  default-shell: ${AGENT_DEFAULT_SHELL:/bin/sh}
+  max-concurrent: ${AGENT_MAX_CONCURRENT:5}
+  adk:
+    enabled: ${AGENT_ADK_ENABLED:true}
+    model: ${AGENT_ADK_MODEL:gemini-flash-lite-latest}
+    api-key: ${GOOGLE_AI_API_KEY:}
 
 spring:
   datasource:
-    url: jdbc:h2:file:./agent-data
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./agent-data}
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
@@ -19,5 +23,5 @@ spring:
     show-sql: false
   h2:
     console:
-      enabled: true
+      enabled: ${H2_CONSOLE_ENABLED:true}
       path: /h2-console

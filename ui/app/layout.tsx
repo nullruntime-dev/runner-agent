@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Runner Agent',
-  description: 'Remote command executor UI',
+  title: 'GRIPHOOK',
+  description: 'AI-powered deployment automation',
 };
 
 export default function RootLayout({

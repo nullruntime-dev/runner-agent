@@ -57,7 +57,7 @@ export default function StepList({ steps }: StepListProps) {
             <div className="mt-4 space-y-3">
               <div>
                 <div className="text-xs text-gray-500 mb-1">Command</div>
-                <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+                <pre className="bg-gray-100 p-3  text-sm overflow-x-auto">
                   {step.run}
                 </pre>
               </div>
@@ -65,7 +65,7 @@ export default function StepList({ steps }: StepListProps) {
               {step.output && (
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Output</div>
-                  <pre className="bg-gray-900 text-gray-200 p-3 rounded text-sm overflow-x-auto max-h-64 overflow-y-auto">
+                  <pre className="bg-gray-900 text-gray-200 p-3  text-sm overflow-x-auto max-h-64 overflow-y-auto">
                     {step.output}
                   </pre>
                 </div>
@@ -74,7 +74,7 @@ export default function StepList({ steps }: StepListProps) {
               {step.error && (
                 <div>
                   <div className="text-xs text-red-500 mb-1">Error</div>
-                  <pre className="bg-red-50 text-red-700 p-3 rounded text-sm overflow-x-auto">
+                  <pre className="bg-red-50 text-red-700 p-3  text-sm overflow-x-auto">
                     {step.error}
                   </pre>
                 </div>

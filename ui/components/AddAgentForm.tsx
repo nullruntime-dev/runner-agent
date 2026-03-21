@@ -44,13 +44,13 @@ export default function AddAgentForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 bg-red-950 border border-red-900 text-red-400 text-xs">
+        <div className="p-3 bg-[#ff0044]/10 border border-[#ff0044]/30 text-[#ff0044] text-xs">
           {error}
         </div>
       )}
 
       <div>
-        <label className="block text-xs text-neutral-500 uppercase tracking-wider mb-1.5">
+        <label className="block text-xs text-[#888] uppercase tracking-wider mb-1.5">
           Agent Name
         </label>
         <input
@@ -59,12 +59,12 @@ export default function AddAgentForm() {
           onChange={(e) => setName(e.target.value)}
           placeholder="Production Server"
           required
-          className="w-full h-9 px-3 bg-neutral-950 border border-neutral-800 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          className="w-full h-9 px-3 bg-[#111] border border-[#1a1a1a] text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#00fff2] transition-colors"
         />
       </div>
 
       <div>
-        <label className="block text-xs text-neutral-500 uppercase tracking-wider mb-1.5">
+        <label className="block text-xs text-[#888] uppercase tracking-wider mb-1.5">
           Agent URL
         </label>
         <input
@@ -73,12 +73,12 @@ export default function AddAgentForm() {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="http://192.168.1.100:8090"
           required
-          className="w-full h-9 px-3 bg-neutral-950 border border-neutral-800 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          className="w-full h-9 px-3 bg-[#111] border border-[#1a1a1a] text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#00fff2] transition-colors"
         />
       </div>
 
       <div>
-        <label className="block text-xs text-neutral-500 uppercase tracking-wider mb-1.5">
+        <label className="block text-xs text-[#888] uppercase tracking-wider mb-1.5">
           API Token
         </label>
         <input
@@ -87,14 +87,14 @@ export default function AddAgentForm() {
           onChange={(e) => setToken(e.target.value)}
           placeholder="Enter agent token"
           required
-          className="w-full h-9 px-3 bg-neutral-950 border border-neutral-800 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-neutral-600"
+          className="w-full h-9 px-3 bg-[#111] border border-[#1a1a1a] text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#00fff2] transition-colors"
         />
       </div>
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full h-9 bg-white hover:bg-neutral-200 text-neutral-900 text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-50"
+        className="w-full h-9 bg-gradient-to-r from-[#00fff2] to-[#00cccc] hover:from-[#00cccc] hover:to-[#00fff2] text-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(0,255,242,0.3)]"
       >
         {loading ? 'CONNECTING...' : 'ADD AGENT'}
       </button>

@@ -4,7 +4,7 @@ export default function TroubleshootingPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold text-white mb-4">Troubleshooting</h1>
-      <p className="text-neutral-400 mb-8">
+      <p className="text-[#888] mb-8">
         Common issues and how to resolve them.
       </p>
 
@@ -42,7 +42,7 @@ export default function TroubleshootingPage() {
           problem="Execution stuck in RUNNING status"
           solutions={[
             "Use the cancel endpoint: POST /execution/{id}/cancel",
-            "Check agent logs: journalctl -u runner-agent",
+            "Check agent logs: journalctl -u griphook-agent",
             "Restart the agent to clean up stuck processes"
           ]}
         />
@@ -82,6 +82,47 @@ export default function TroubleshootingPage() {
             "Run migrations: npx prisma migrate deploy"
           ]}
         />
+
+        <TroubleshootItem
+          problem="Slack slash command not working"
+          solutions={[
+            "Verify the command name in Slack matches the Slash Command config in Skills",
+            "Check agent logs for 'No SlashCommandHandler registered for command'",
+            "Ensure Socket Mode is enabled in your Slack App settings",
+            "Reinstall the Slack app after adding slash commands",
+            "Restart the agent after changing Slack configuration"
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="Slack responses stuck at 'Processing...'"
+          solutions={[
+            "Check agent logs for errors in command processing",
+            "Verify the bot token has chat:write permission",
+            "Ensure the default channel is accessible by the bot",
+            "Check if the AI model (Gemini) API key is valid"
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="AI Chat not responding"
+          solutions={[
+            "Verify agent.adk.enabled=true in application.yml",
+            "Check GOOGLE_API_KEY or Gemini credentials are set",
+            "Look for ADK errors in agent logs",
+            "Ensure the agent is online (check health endpoint)"
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="Gmail/SMTP emails not sending"
+          solutions={[
+            "For Gmail: Generate an App Password (not your regular password)",
+            "Check SMTP port matches encryption (587 for TLS, 465 for SSL)",
+            "Verify sender email is allowed to send from SMTP server",
+            "Check agent logs for javax.mail errors"
+          ]}
+        />
       </div>
 
       <h2 className="text-xl font-bold text-white mt-12 mb-4">Useful Commands</h2>
@@ -94,7 +135,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \\
   http://localhost:8090/executions?limit=10 | jq
 
 # View agent logs
-journalctl -u runner-agent -f
+journalctl -u griphook-agent -f
 
 # View Control Center logs
 journalctl -u runner-control-center -f
@@ -112,16 +153,26 @@ lsof -i :3000
 
 # Test SSE connection
 curl -N -H "Authorization: Bearer $TOKEN" \\
-  http://localhost:8090/execution/{id}/logs`}
+  http://localhost:8090/execution/{id}/logs
+
+# Test AI Chat endpoint
+curl -X POST -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "list executions"}' \\
+  http://localhost:8090/agent/chat
+
+# Check Slack connection status
+# Look for "Slack Socket Mode started successfully" in logs
+journalctl -u griphook-agent | grep -i slack`}
       </CodeBlock>
 
       <h2 className="text-xl font-bold text-white mt-12 mb-4">Debug Mode</h2>
-      <p className="text-neutral-400 mb-4">
+      <p className="text-[#888] mb-4">
         Enable verbose logging for debugging:
       </p>
       <CodeBlock language="bash">
 {`# Agent - enable debug logging
-AGENT_TOKEN=xxx java -jar runner-agent.jar \\
+AGENT_TOKEN=xxx java -jar griphook-agent.jar \\
   --logging.level.dev.runner.agent=DEBUG
 
 # Control Center - enable verbose output
@@ -129,7 +180,7 @@ DEBUG=* npm run dev`}
       </CodeBlock>
 
       <h2 className="text-xl font-bold text-white mt-12 mb-4">Reset Database</h2>
-      <p className="text-neutral-400 mb-4">
+      <p className="text-[#888] mb-4">
         If you need to start fresh (warning: deletes all data):
       </p>
       <CodeBlock language="bash">
