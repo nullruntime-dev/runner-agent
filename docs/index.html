@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Griphook — AI-Powered Deployment Agent</title>
   <meta name="description" content="The deployment agent that actually does things. Remote command execution, AI chat, and extensible skills.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -148,6 +151,7 @@
       background: rgba(5, 5, 5, 0.8);
       backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
+      padding-top: env(safe-area-inset-top);
     }
 
     nav .container {
@@ -155,6 +159,12 @@
       align-items: center;
       justify-content: space-between;
       height: 72px;
+    }
+
+    @media (max-width: 768px) {
+      nav .container {
+        height: 64px;
+      }
     }
 
     .logo {
@@ -460,6 +470,8 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 13px;
       line-height: 2;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .terminal-line {
@@ -467,6 +479,14 @@
       gap: 12px;
       opacity: 0;
       animation: typeIn 0.5s forwards;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .terminal-line {
+        white-space: normal;
+        flex-wrap: wrap;
+      }
     }
 
     .terminal-line:nth-child(1) { animation-delay: 0.5s; }
@@ -1280,12 +1300,27 @@
     /* Mobile menu */
     .mobile-menu-btn {
       display: none;
-      background: none;
+      background: var(--bg-card);
       border: 1px solid var(--border-bright);
-      padding: 10px;
+      padding: 12px;
       cursor: pointer;
       color: var(--text-primary);
       z-index: 1001;
+      align-items: center;
+      justify-content: center;
+      min-width: 48px;
+      min-height: 48px;
+      transition: all 0.2s;
+    }
+
+    .mobile-menu-btn:hover {
+      border-color: var(--cyan);
+      background: var(--bg-elevated);
+    }
+
+    .mobile-menu-btn svg {
+      width: 24px;
+      height: 24px;
     }
 
     .mobile-menu {
@@ -1298,10 +1333,13 @@
       background: rgba(5, 5, 5, 0.98);
       backdrop-filter: blur(20px);
       z-index: 999;
-      padding: 100px 40px 40px;
+      padding: calc(100px + env(safe-area-inset-top)) 40px calc(40px + env(safe-area-inset-bottom));
+      padding-left: calc(40px + env(safe-area-inset-left));
+      padding-right: calc(40px + env(safe-area-inset-right));
       flex-direction: column;
       gap: 0;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .mobile-menu.open {
@@ -1342,6 +1380,275 @@
 
       .mobile-menu-btn {
         display: flex;
+      }
+    }
+
+    /* ================================
+       MOBILE & TOUCH OPTIMIZATIONS
+       ================================ */
+
+    /* Better touch targets */
+    @media (max-width: 768px) {
+      .btn {
+        padding: 16px 28px;
+        font-size: 14px;
+        min-height: 48px;
+      }
+
+      /* Hero mobile improvements */
+      .hero {
+        min-height: auto;
+        padding: 100px 0 60px;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+        letter-spacing: -1px;
+        margin-bottom: 20px;
+      }
+
+      .hero-subtitle {
+        font-size: 16px;
+        line-height: 1.7;
+        margin-bottom: 32px;
+      }
+
+      .hero-tag {
+        margin-bottom: 24px;
+        font-size: 11px;
+      }
+
+      .hero-cta {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .hero-cta .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      /* Terminal mobile */
+      .terminal {
+        margin-top: 40px;
+      }
+
+      .terminal-body {
+        padding: 16px;
+        font-size: 11px;
+        line-height: 1.8;
+        overflow-x: auto;
+      }
+
+      .terminal-line {
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      /* Stats mobile */
+      .stats {
+        padding: 40px 0;
+      }
+
+      .stats-grid {
+        gap: 24px;
+      }
+
+      .stat-value {
+        font-size: 36px;
+      }
+
+      /* Section headers mobile */
+      .section-title {
+        font-size: 28px !important;
+      }
+
+      .section-subtitle {
+        font-size: 15px !important;
+      }
+
+      /* Features grid mobile */
+      .features-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+      }
+
+      .feature {
+        padding: 24px !important;
+      }
+
+      /* Getting started mobile */
+      .getting-started {
+        padding: 80px 0 !important;
+      }
+
+      .getting-started-content {
+        gap: 40px !important;
+      }
+
+      .gs-step {
+        padding: 20px !important;
+        gap: 16px !important;
+      }
+
+      .gs-step-number {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 16px !important;
+      }
+
+      .gs-step-content h4 {
+        font-size: 16px !important;
+      }
+
+      .gs-step-content code {
+        font-size: 11px !important;
+        word-break: break-all;
+      }
+
+      /* Code block mobile */
+      .code-block {
+        margin-top: 32px;
+      }
+
+      .code-tabs {
+        flex-wrap: wrap;
+        gap: 4px !important;
+      }
+
+      .code-tab {
+        padding: 8px 12px !important;
+        font-size: 11px !important;
+      }
+
+      .code-content {
+        padding: 20px !important;
+        font-size: 11px !important;
+        overflow-x: auto;
+      }
+
+      /* How it works mobile */
+      .steps-container {
+        flex-direction: column !important;
+        gap: 24px !important;
+      }
+
+      .step {
+        padding: 24px !important;
+      }
+
+      .step-number {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 20px !important;
+      }
+
+      /* Skills grid mobile */
+      .skills-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+      }
+
+      /* CTA section mobile */
+      .cta {
+        padding: 60px 0 !important;
+      }
+
+      .cta h2 {
+        font-size: 28px !important;
+      }
+
+      .cta-buttons {
+        flex-direction: column !important;
+        width: 100%;
+      }
+
+      .cta-buttons .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      /* Footer mobile */
+      .footer-grid {
+        grid-template-columns: 1fr !important;
+        gap: 32px !important;
+        text-align: center;
+      }
+
+      .footer-links {
+        justify-content: center;
+      }
+    }
+
+    /* Small phones */
+    @media (max-width: 400px) {
+      .container {
+        padding: 0 16px;
+      }
+
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .terminal-body {
+        font-size: 10px;
+      }
+
+      .code-tab {
+        padding: 6px 10px !important;
+        font-size: 10px !important;
+      }
+
+      .mobile-menu {
+        padding: 90px 20px 20px;
+      }
+
+      .mobile-menu a {
+        font-size: 20px;
+        padding: 20px 0;
+      }
+    }
+
+    /* Touch-friendly hover states */
+    @media (hover: none) {
+      .btn-primary:hover::before {
+        display: none;
+      }
+
+      .btn:hover {
+        transform: none;
+      }
+
+      .feature:hover {
+        transform: none;
+      }
+
+      .skill-card:hover {
+        transform: none;
+      }
+
+      .nav-links a:hover::after {
+        width: 0;
+      }
+    }
+
+    /* Improve tap highlight */
+    @media (max-width: 768px) {
+      a, button {
+        -webkit-tap-highlight-color: rgba(0, 255, 242, 0.2);
+      }
+    }
+
+    /* Fix horizontal scroll */
+    html, body {
+      overflow-x: hidden;
+      max-width: 100vw;
+    }
+
+    /* Smooth scrolling for iOS */
+    @supports (-webkit-touch-callout: none) {
+      html {
+        scroll-behavior: auto;
       }
     }
 
