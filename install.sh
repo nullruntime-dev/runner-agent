@@ -40,6 +40,7 @@ print_banner() {
     echo -e "${NC}"
 }
 
+
 log_info() {
     echo -e "${CYAN}[INFO]${NC} $1"
 }
@@ -65,10 +66,10 @@ show_menu() {
     echo -e "     ${DIM}Fastest setup. Runs agent + UI in containers.${NC}"
     echo ""
     echo -e "  ${CYAN}2)${NC} ${BOLD}Standalone JAR${NC}"
-    echo -e "     ${DIM}Download JAR and run with Java 21. Creates systemd service.${NC}"
+    echo -e "     ${DIM}Download JAR and run with Java 21. Uses svcify for service management.${NC}"
     echo ""
     echo -e "  ${MAGENTA}3)${NC} ${BOLD}Build from Source${NC}"
-    echo -e "     ${DIM}Clone repo and build with Gradle. For development.${NC}"
+    echo -e "     ${DIM}Clone repo and build with Gradle. Uses svcify for service management.${NC}"
     echo ""
     echo -e "  ${RED}q)${NC} ${BOLD}Quit${NC}"
     echo ""
@@ -307,6 +308,191 @@ check_java() {
     fi
 }
 
+# Get installed Node.js version
+get_node_version() {
+    if command -v node &> /dev/null; then
+        node -v 2>/dev/null | sed 's/v//' | cut -d'.' -f1
+    else
+        echo "0"
+    fi
+}
+
+# Install Node.js (latest LTS)
+install_node() {
+    log_info "Installing Node.js ${REQUIRED_NODE_VERSION}..."
+
+    case "$PKG_MANAGER" in
+        apt)
+            # Install via NodeSource
+            curl -fsSL https://deb.nodesource.com/setup_${REQUIRED_NODE_VERSION}.x | $SUDO bash -
+            $SUDO apt-get install -y nodejs
+            ;;
+        dnf)
+            curl -fsSL https://rpm.nodesource.com/setup_${REQUIRED_NODE_VERSION}.x | $SUDO bash -
+            $SUDO dnf install -y nodejs
+            ;;
+        pacman)
+            $SUDO pacman -Sy --noconfirm nodejs npm
+            ;;
+        zypper)
+            $SUDO zypper install -y nodejs npm
+            ;;
+        brew)
+            brew install node@${REQUIRED_NODE_VERSION}
+            ;;
+        *)
+            log_error "Unsupported package manager: $PKG_MANAGER"
+            log_info "Please install Node.js ${REQUIRED_NODE_VERSION}+ manually and re-run this script"
+            exit 1
+            ;;
+    esac
+
+    log_success "Node.js installed: $(node -v)"
+}
+
+# Check Node.js dependency
+check_node() {
+    NODE_VERSION=$(get_node_version)
+    if [ "$NODE_VERSION" -ge "$REQUIRED_NODE_VERSION" ]; then
+        log_success "Node.js ${NODE_VERSION} found (required: ${REQUIRED_NODE_VERSION}+)"
+        return 0
+    else
+        if [ "$NODE_VERSION" -eq "0" ]; then
+            log_warn "Node.js not found"
+        else
+            log_warn "Node.js ${NODE_VERSION} found, but ${REQUIRED_NODE_VERSION}+ required"
+        fi
+        return 1
+    fi
+}
+
+# Install frontend dependencies and create service
+install_frontend() {
+    log_info "Setting up GRIPHOOK UI (Frontend)..."
+
+    # Check/install Node.js
+    if ! check_node; then
+        install_node
+    fi
+
+    # Check for git
+    if ! command -v git &> /dev/null; then
+        log_info "Installing git..."
+        case "$PKG_MANAGER" in
+            apt) $SUDO apt-get install -y git ;;
+            dnf) $SUDO dnf install -y git ;;
+            pacman) $SUDO pacman -Sy --noconfirm git ;;
+            zypper) $SUDO zypper install -y git ;;
+            brew) brew install git ;;
+        esac
+    fi
+
+    # Create UI directory
+    UI_DIR="${INSTALL_DIR}/ui"
+    $SUDO mkdir -p "$UI_DIR"
+
+    # Download UI source from GitHub
+    log_info "Downloading UI source..."
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+
+    git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" griphook
+    $SUDO cp -r griphook/ui/* "$UI_DIR/"
+
+    # Cleanup
+    cd /
+    rm -rf "$TEMP_DIR"
+
+    # Install npm dependencies
+    log_info "Installing npm dependencies..."
+    cd "$UI_DIR"
+    $SUDO npm install
+
+    # Create .env.local for UI
+    if [ ! -f "${UI_DIR}/.env.local" ]; then
+        $SUDO tee "${UI_DIR}/.env.local" > /dev/null << 'EOF'
+# GRIPHOOK UI Configuration
+# Path to SQLite database for agent storage
+DATABASE_URL="file:./agents.db"
+EOF
+        log_success "Created ${UI_DIR}/.env.local"
+    fi
+
+    # Initialize Prisma database
+    log_info "Initializing database..."
+    cd "$UI_DIR"
+    $SUDO npx prisma generate 2>/dev/null || true
+    $SUDO npx prisma db push 2>/dev/null || true
+
+    # Create startup script for UI
+    $SUDO tee "${UI_DIR}/start.sh" > /dev/null << 'EOF'
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+export NODE_ENV=production
+export PORT=3000
+exec npm run dev
+EOF
+    $SUDO chmod +x "${UI_DIR}/start.sh"
+
+    # Create service with svcify
+    create_frontend_service
+
+    log_success "Frontend installation complete"
+}
+
+# Create frontend service using svcify
+create_frontend_service() {
+    if [ "$OS" == "macos" ]; then
+        log_warn "svcify is for Linux only, skipping frontend service creation"
+        return
+    fi
+
+    # Install svcify if not present
+    if ! command -v svcify &> /dev/null; then
+        if ! install_svcify; then
+            log_warn "Skipping frontend service creation - svcify not available"
+            return
+        fi
+    fi
+
+    log_info "Creating frontend service with svcify..."
+
+    UI_DIR="${INSTALL_DIR}/ui"
+    if $SUDO svcify create griphook-ui --exec "${UI_DIR}/start.sh" --workdir "${UI_DIR}" --restart always --description "GRIPHOOK UI Dashboard"; then
+        log_success "Created service with svcify: griphook-ui"
+    else
+        log_warn "svcify service creation failed, falling back to manual setup"
+        create_frontend_service_fallback
+    fi
+}
+
+# Fallback frontend service creation
+create_frontend_service_fallback() {
+    if [ -d /etc/systemd/system ] && [ "$OS" != "macos" ]; then
+        log_info "Creating frontend systemd service (fallback)..."
+        UI_DIR="${INSTALL_DIR}/ui"
+        $SUDO tee /etc/systemd/system/griphook-ui.service > /dev/null << EOF
+[Unit]
+Description=GRIPHOOK UI Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${UI_DIR}
+ExecStart=${UI_DIR}/start.sh
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        $SUDO systemctl daemon-reload
+        log_success "Created systemd service: griphook-ui.service"
+    fi
+}
+
 # Install via standalone JAR
 install_jar_method() {
     log_info "Installing GRIPHOOK via standalone JAR..."
@@ -349,8 +535,11 @@ exec java -Xmx512m -jar griphook-agent.jar
 EOF
     $SUDO chmod +x "${INSTALL_DIR}/start.sh"
 
-    # Create systemd service
-    create_systemd_service
+    # Create service with svcify
+    create_service_with_svcify
+
+    # Install frontend
+    install_frontend
 
     log_success "JAR installation complete"
 }
@@ -414,8 +603,11 @@ exec java -Xmx512m -jar griphook-agent.jar
 EOF
     $SUDO chmod +x "${INSTALL_DIR}/start.sh"
 
-    # Create systemd service
-    create_systemd_service
+    # Create service with svcify
+    create_service_with_svcify
+
+    # Install frontend
+    install_frontend
 
     log_success "Source installation complete"
 }
@@ -447,10 +639,58 @@ EOF
     fi
 }
 
-# Create systemd service
-create_systemd_service() {
+# Install svcify for service management
+install_svcify() {
+    if command -v svcify &> /dev/null; then
+        log_success "svcify already installed"
+        return 0
+    fi
+
+    log_info "Installing svcify for service management..."
+
+    # Install svcify from GitHub
+    SVCIFY_URL="https://raw.githubusercontent.com/noodlescripter/svcify/main/install.sh"
+
+    if curl -fsSL "$SVCIFY_URL" | $SUDO bash; then
+        log_success "svcify installed"
+        return 0
+    else
+        log_warn "Could not install svcify automatically"
+        log_info "Install manually: curl -fsSL $SVCIFY_URL | sudo bash"
+        return 1
+    fi
+}
+
+# Create service using svcify
+create_service_with_svcify() {
+    if [ "$OS" == "macos" ]; then
+        log_warn "svcify is for Linux only, skipping service creation"
+        return
+    fi
+
+    # Install svcify if not present
+    if ! install_svcify; then
+        log_warn "Skipping service creation - svcify not available"
+        return
+    fi
+
+    log_info "Creating service with svcify..."
+
+    # Use svcify to create the service
+    cd "$INSTALL_DIR"
+    if $SUDO svcify create griphook --exec "${INSTALL_DIR}/start.sh" --workdir "${INSTALL_DIR}" --restart always --description "GRIPHOOK AI-Powered Deployment Agent"; then
+        log_success "Created service with svcify: griphook"
+    else
+        log_warn "svcify service creation failed, falling back to manual setup"
+        # Fallback: create service file directly
+        create_systemd_service_fallback
+    fi
+}
+
+# Fallback systemd service creation (if svcify fails)
+create_systemd_service_fallback() {
     if [ -d /etc/systemd/system ] && [ "$OS" != "macos" ]; then
-        log_info "Creating systemd service..."
+        log_info "Creating systemd service (fallback)..."
         $SUDO tee /etc/systemd/system/griphook.service > /dev/null << EOF
 [Unit]
 Description=GRIPHOOK Agent
@@ -498,23 +738,41 @@ print_next_steps() {
             echo -e "  ${CYAN}1.${NC} Configure your API keys:"
             echo -e "     ${YELLOW}sudo nano ${INSTALL_DIR}/.env${NC}"
             echo ""
-            echo -e "  ${CYAN}2.${NC} Start the agent:"
-            if [ -f /etc/systemd/system/griphook.service ]; then
-                echo -e "     ${YELLOW}sudo systemctl start griphook${NC}"
-                echo -e "     ${YELLOW}sudo systemctl enable griphook${NC}  # auto-start on boot"
+            echo -e "  ${CYAN}2.${NC} Start the services:"
+            if command -v svcify &> /dev/null; then
+                echo -e "     ${YELLOW}sudo svcify start griphook${NC}       # Backend API"
+                echo -e "     ${YELLOW}sudo svcify start griphook-ui${NC}    # Frontend UI"
+                echo ""
+                echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                echo -e "     ${YELLOW}sudo svcify enable griphook griphook-ui${NC}"
+            elif [ -f /etc/systemd/system/griphook.service ]; then
+                echo -e "     ${YELLOW}sudo systemctl start griphook${NC}       # Backend API"
+                echo -e "     ${YELLOW}sudo systemctl start griphook-ui${NC}    # Frontend UI"
+                echo ""
+                echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                echo -e "     ${YELLOW}sudo systemctl enable griphook griphook-ui${NC}"
             else
-                echo -e "     ${YELLOW}${INSTALL_DIR}/start.sh${NC}"
+                echo -e "     ${YELLOW}${INSTALL_DIR}/start.sh${NC}       # Backend"
+                echo -e "     ${YELLOW}${INSTALL_DIR}/ui/start.sh${NC}    # Frontend"
             fi
             echo ""
             echo -e "  ${CYAN}3.${NC} Check health:"
             echo -e "     ${YELLOW}curl http://localhost:8090/health${NC}"
             echo ""
             echo -e "  ${CYAN}4.${NC} View logs:"
-            if [ -f /etc/systemd/system/griphook.service ]; then
-                echo -e "     ${YELLOW}sudo journalctl -u griphook -f${NC}"
+            if command -v svcify &> /dev/null; then
+                echo -e "     ${YELLOW}sudo svcify logs griphook${NC}       # Backend logs"
+                echo -e "     ${YELLOW}sudo svcify logs griphook-ui${NC}    # Frontend logs"
+            elif [ -f /etc/systemd/system/griphook.service ]; then
+                echo -e "     ${YELLOW}sudo journalctl -u griphook -f${NC}       # Backend logs"
+                echo -e "     ${YELLOW}sudo journalctl -u griphook-ui -f${NC}    # Frontend logs"
             else
                 echo -e "     (logs output to terminal)"
             fi
+            echo ""
+            echo -e "  ${CYAN}5.${NC} Access the dashboard:"
+            echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
+            echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
             ;;
     esac
 
