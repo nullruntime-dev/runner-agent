@@ -1247,6 +1247,163 @@
       position: relative;
     }
 
+    /* Oneliner installer banner */
+    .oneliner-banner {
+      background: linear-gradient(135deg, rgba(0, 255, 242, 0.08), rgba(153, 0, 255, 0.08));
+      border: 1px solid rgba(0, 255, 242, 0.4);
+      padding: 36px 40px;
+      margin-bottom: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .oneliner-banner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), var(--magenta), transparent);
+    }
+
+    .oneliner-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      background: rgba(0, 255, 242, 0.1);
+      border: 1px solid rgba(0, 255, 242, 0.4);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 20px;
+    }
+
+    .oneliner-tag-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--cyan);
+      animation: blink 2s infinite;
+    }
+
+    .oneliner-banner h3 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .oneliner-banner p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+
+    .oneliner-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .oneliner-grid {
+        grid-template-columns: 1fr;
+      }
+      .oneliner-banner {
+        padding: 28px 24px;
+      }
+      .oneliner-banner h3 {
+        font-size: 22px;
+      }
+    }
+
+    .oneliner-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      padding: 20px 22px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .oneliner-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+
+    .oneliner-platform {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .oneliner-platform svg {
+      width: 16px;
+      height: 16px;
+      color: var(--cyan);
+    }
+
+    .oneliner-code {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--text-primary);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .oneliner-code code {
+      flex: 1;
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+
+    .oneliner-copy {
+      flex-shrink: 0;
+      background: rgba(0, 255, 242, 0.1);
+      border: 1px solid rgba(0, 255, 242, 0.4);
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .oneliner-copy:hover {
+      background: rgba(0, 255, 242, 0.2);
+      color: var(--text-primary);
+    }
+
+    .oneliner-copy.copied {
+      background: rgba(57, 255, 20, 0.15);
+      border-color: var(--lime);
+      color: var(--lime);
+    }
+
     .requirements-box::before {
       content: '';
       position: absolute;
@@ -2722,6 +2879,42 @@
         </div>
       </div>
 
+      <!-- One-liner installer banner -->
+      <div class="oneliner-banner reveal">
+        <div class="oneliner-tag">
+          <span class="oneliner-tag-dot"></span>
+          One-Liner Installer
+        </div>
+        <h3>Install in a single command</h3>
+        <p>Pick your platform, paste into a terminal, and Griphook handles the rest &mdash; dependencies, build, services, and startup.</p>
+        <div class="oneliner-grid">
+          <div class="oneliner-card">
+            <div class="oneliner-platform">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3M13 15h3M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+              </svg>
+              Linux / macOS
+            </div>
+            <div class="oneliner-code">
+              <code id="oneliner-unix">curl -fsSL https://griphook.dev/install.sh | bash</code>
+              <button class="oneliner-copy" onclick="copyOneliner(this, 'oneliner-unix')">Copy</button>
+            </div>
+          </div>
+          <div class="oneliner-card">
+            <div class="oneliner-platform">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
+              Windows (PowerShell)
+            </div>
+            <div class="oneliner-code">
+              <code id="oneliner-win">irm https://griphook.dev/install.ps1 | iex</code>
+              <button class="oneliner-copy" onclick="copyOneliner(this, 'oneliner-win')">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Requirements callout -->
       <div class="requirements-box reveal">
         <div class="requirements-header">
@@ -3659,6 +3852,19 @@ result = response.json()
           btn.textContent = originalText;
           btn.style.color = '';
           btn.style.borderColor = '';
+        }, 2000);
+      });
+    }
+
+    function copyOneliner(btn, codeId) {
+      const code = document.getElementById(codeId).textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
         }, 2000);
       });
     }

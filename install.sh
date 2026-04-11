@@ -304,13 +304,20 @@ EOF
     log_success "Docker installation complete"
 }
 
-# Get installed Java version
+# Get installed Java major version (handles OpenJDK, Oracle, Temurin, GraalVM, EA builds)
 get_java_version() {
-    if command -v java &> /dev/null; then
-        java -version 2>&1 | head -n 1 | cut -d'"' -f2 | cut -d'.' -f1
-    else
+    if ! command -v java &> /dev/null; then
         echo "0"
+        return
     fi
+    local ver
+    # Java 9+: --version writes to stdout
+    ver=$(java --version 2>/dev/null | head -n1 | grep -oE '[0-9]+' | head -n1)
+    # Fallback for Java 8 which only supports -version (to stderr)
+    if [ -z "$ver" ]; then
+        ver=$(java -version 2>&1 | head -n1 | grep -oE '[0-9]+' | head -n1)
+    fi
+    echo "${ver:-0}"
 }
 
 # Install JDK 21
@@ -352,6 +359,10 @@ install_java() {
 # Check Java dependency
 check_java() {
     JAVA_VERSION=$(get_java_version)
+    # Guard against non-numeric results so [ -ge ] doesn't abort the script under `set -e`.
+    if ! [[ "$JAVA_VERSION" =~ ^[0-9]+$ ]]; then
+        JAVA_VERSION=0
+    fi
     if [ "$JAVA_VERSION" -ge "$REQUIRED_JAVA_VERSION" ]; then
         log_success "Java ${JAVA_VERSION} found (required: ${REQUIRED_JAVA_VERSION}+)"
         return 0
@@ -629,23 +640,20 @@ install_source_method() {
     $SUDO mkdir -p "$INSTALL_DIR"
     $SUDO mkdir -p "$INSTALL_DIR/data"
 
-    # Clone and build
+    # Clone and build (trap ensures temp dir is removed on success, error, or Ctrl-C)
     TEMP_DIR=$(mktemp -d)
+    trap 'cd /; rm -rf "$TEMP_DIR"; trap - EXIT' EXIT
     cd "$TEMP_DIR"
 
     log_info "Cloning repository..."
     git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" griphook
     cd griphook
 
-    log_info "Building with Gradle..."
+    log_info "Building with Gradle (this takes a few minutes)..."
     chmod +x gradlew
     ./gradlew bootJar --no-daemon
 
     $SUDO cp build/libs/*.jar "${INSTALL_DIR}/griphook-agent.jar"
-
-    # Cleanup
-    cd /
-    rm -rf "$TEMP_DIR"
 
     log_success "Built griphook-agent.jar"
 
