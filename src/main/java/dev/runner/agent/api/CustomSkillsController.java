@@ -175,6 +175,29 @@ public class CustomSkillsController {
         }
     }
 
+    @PostMapping("/{name}/visibility")
+    public ResponseEntity<Map<String, Object>> toggleVisibility(
+            @PathVariable String name,
+            @RequestBody VisibilityRequest request
+    ) {
+        log.info("POST /agent/custom-skills/{}/visibility hidden={}", name, request.hidden());
+
+        try {
+            customSkillService.toggleVisibility(name, request.hidden());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "name", name,
+                    "hidden", request.hidden()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
     private CustomSkillDto toDto(CustomSkill skill) {
         return new CustomSkillDto(
                 skill.getId(),
@@ -185,6 +208,7 @@ public class CustomSkillsController {
                 skill.getDefinitionJson(),
                 skill.getIcon(),
                 skill.isEnabled(),
+                skill.isHidden(),
                 skill.getExecutionCount(),
                 skill.getCreatedAt() != null ? skill.getCreatedAt().toString() : null,
                 skill.getUpdatedAt() != null ? skill.getUpdatedAt().toString() : null
@@ -200,6 +224,7 @@ public class CustomSkillsController {
             String definitionJson,
             String icon,
             boolean enabled,
+            boolean hidden,
             Integer executionCount,
             String createdAt,
             String updatedAt
@@ -222,6 +247,8 @@ public class CustomSkillsController {
     ) {}
 
     public record ToggleRequest(boolean enabled) {}
+
+    public record VisibilityRequest(boolean hidden) {}
 
     public record RunSkillRequest(
             String input,

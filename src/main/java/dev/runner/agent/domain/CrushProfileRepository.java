@@ -40,4 +40,20 @@ public interface CrushProfileRepository extends JpaRepository<CrushProfile, Long
     Optional<CrushProfile> findFirstBySessionIdOrderByUpdatedAtDesc(String sessionId);
 
     void deleteBySessionIdAndName(String sessionId, String name);
+
+    // Global lookups (across all sessions)
+    Optional<CrushProfile> findFirstByNameOrderByUpdatedAtDesc(String name);
+
+    Optional<CrushProfile> findFirstByNameIgnoreCaseOrderByUpdatedAtDesc(String name);
+
+    Optional<CrushProfile> findFirstByDisplayNameIgnoreCaseOrderByUpdatedAtDesc(String displayName);
+
+    List<CrushProfile> findByNameContainingIgnoreCaseOrderByUpdatedAtDesc(String name);
+
+    // Get ALL profiles with exact name match (for finding the best one)
+    List<CrushProfile> findByNameIgnoreCaseOrderByUpdatedAtDesc(String name);
+
+    List<CrushProfile> findAllByOrderByUpdatedAtDesc();
+
+    void deleteByName(String name);
 }

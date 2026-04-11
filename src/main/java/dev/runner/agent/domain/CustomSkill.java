@@ -54,6 +54,10 @@ public class CustomSkill {
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean hidden = false;
+
     @Builder.Default
     private Integer executionCount = 0;
 

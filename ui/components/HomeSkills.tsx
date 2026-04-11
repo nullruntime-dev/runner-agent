@@ -98,8 +98,8 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
     );
   }
 
-  const activeSkills = skills.filter(s => s.configured && s.enabled);
-  const inactiveSkills = skills.filter(s => !s.configured || !s.enabled);
+  const activeSkills = skills.filter(s => s.configured && s.enabled && !s.hidden);
+  const inactiveSkills = skills.filter(s => (!s.configured || !s.enabled) && !s.hidden);
 
   return (
     <div className="space-y-4">
@@ -160,14 +160,14 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
       )}
 
       {/* Custom Skills */}
-      {customSkills.filter(s => s.enabled).length > 0 ? (
+      {customSkills.filter(s => s.enabled && !s.hidden).length > 0 ? (
         <>
           {(activeSkills.length > 0 || inactiveSkills.length > 0) && (
             <div className="border-t border-[#1a1a1a]" />
           )}
           <div className="space-y-1">
             <p className="text-[10px] text-[#444] uppercase tracking-wider px-2 mb-2">Custom Skills</p>
-            {customSkills.filter(s => s.enabled).map((skill) => (
+            {customSkills.filter(s => s.enabled && !s.hidden).map((skill) => (
               <Link
                 key={skill.name}
                 href={`/agents/${agentId}/chat`}
@@ -231,37 +231,81 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
         </>
       )}
 
-      {/* Scheduled Tasks */}
-      {schedules.filter(s => s.enabled).length > 0 && (
-        <>
-          <div className="border-t border-[#1a1a1a]" />
-          <div className="space-y-1">
-            <p className="text-[10px] text-[#444] uppercase tracking-wider px-2 mb-2">Autopilot</p>
-            {schedules.filter(s => s.enabled).map((task) => (
+      {/* Scheduled Tasks / Autopilot - Always show */}
+      <div className="border-t border-[#1a1a1a]" />
+      <div className="space-y-1">
+        <div className="flex items-center justify-between px-2 mb-2">
+          <p className="text-[10px] text-[#444] uppercase tracking-wider">Autopilot</p>
+          <Link
+            href={`/agents/${agentId}/chat`}
+            className="text-[10px] text-[#00fff2] hover:text-[#00fff2]/80"
+          >
+            Manage
+          </Link>
+        </div>
+
+        {schedules.filter(s => s.enabled).length > 0 ? (
+          <>
+            {schedules.filter(s => s.enabled).slice(0, 3).map((task) => (
               <Link
                 key={task.id}
                 href={`/agents/${agentId}/chat`}
                 className="flex items-center gap-3 px-2 py-2 hover:bg-[#111] transition-colors group"
               >
-                <div className="w-8 h-8 bg-[#00fff2]/10 flex items-center justify-center text-[#00fff2]">
+                <div className={`w-8 h-8 flex items-center justify-center ${
+                  task.type === 'COMMAND' ? 'bg-[#ffaa00]/10 text-[#ffaa00]' :
+                  task.type === 'PROMPT' ? 'bg-[#aa00ff]/10 text-[#aa00ff]' :
+                  'bg-[#00aaff]/10 text-[#00aaff]'
+                }`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white">{task.name}</div>
+                  <div className="text-sm text-white truncate">{task.name}</div>
                   <div className="text-[10px] text-[#666]">
                     {task.scheduleType === 'DAILY' && `Daily at ${task.timeOfDay}`}
                     {task.scheduleType === 'WEEKLY' && `Weekly at ${task.timeOfDay}`}
                     {task.scheduleType === 'INTERVAL' && `Every ${task.intervalMinutes}m`}
+                    {task.scheduleType === 'CRON' && task.cronExpression}
                   </div>
                 </div>
-                <div className="w-2 h-2 bg-[#00fff2] shadow-[0_0_8px_rgba(0,255,242,0.5)]" title="Active" />
+                <div className="flex items-center gap-2">
+                  {task.lastRunStatus && (
+                    <span className={`text-[10px] ${task.lastRunStatus === 'SUCCESS' ? 'text-[#00ff66]' : 'text-[#ff0044]'}`}>
+                      {task.lastRunStatus === 'SUCCESS' ? '✓' : '✗'}
+                    </span>
+                  )}
+                  <div className="w-2 h-2 bg-[#00fff2] shadow-[0_0_8px_rgba(0,255,242,0.5)]" title="Active" />
+                </div>
               </Link>
             ))}
-          </div>
-        </>
-      )}
+            {schedules.filter(s => s.enabled).length > 3 && (
+              <Link
+                href={`/agents/${agentId}/chat`}
+                className="block px-2 py-1 text-[10px] text-[#666] hover:text-[#888]"
+              >
+                +{schedules.filter(s => s.enabled).length - 3} more schedules
+              </Link>
+            )}
+          </>
+        ) : (
+          <Link
+            href={`/agents/${agentId}/chat`}
+            className="flex items-center gap-3 px-2 py-3 hover:bg-[#111] transition-colors group"
+          >
+            <div className="w-8 h-8 bg-[#00fff2]/10 flex items-center justify-center text-[#00fff2] group-hover:bg-[#00fff2]/20 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div className="text-sm text-[#888] group-hover:text-white transition-colors">Add Autopilot Task</div>
+              <div className="text-[10px] text-[#666]">Run tasks on a schedule</div>
+            </div>
+          </Link>
+        )}
+      </div>
 
       {/* Empty state */}
       {skills.length === 0 && customSkills.length === 0 && schedules.length === 0 && (

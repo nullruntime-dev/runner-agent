@@ -37,18 +37,88 @@ public class CrushProfileService {
     @Transactional
     public CrushProfile getOrCreateProfile(String sessionId, String name) {
         String normalizedName = normalizeName(name);
-        return crushProfileRepository.findBySessionIdAndName(sessionId, normalizedName)
-                .orElseGet(() -> {
-                    log.info("Creating new crush profile: session={} name={} displayName={}",
-                            sessionId, normalizedName, name.trim());
-                    CrushProfile profile = CrushProfile.builder()
-                            .sessionId(sessionId)
-                            .name(normalizedName)
-                            .displayName(name.trim())
-                            .messageCount(0)
-                            .build();
-                    return crushProfileRepository.save(profile);
-                });
+
+        // First, try to find globally (across all sessions)
+        Optional<CrushProfile> existing = findProfileGlobally(name);
+        if (existing.isPresent()) {
+            log.info("Found existing global profile for: {}", name);
+            return existing.get();
+        }
+
+        // Create new profile
+        log.info("Creating new crush profile: session={} name={} displayName={}",
+                sessionId, normalizedName, name.trim());
+        CrushProfile profile = CrushProfile.builder()
+                .sessionId(sessionId)
+                .name(normalizedName)
+                .displayName(name.trim())
+                .messageCount(0)
+                .build();
+        return crushProfileRepository.save(profile);
+    }
+
+    /**
+     * Find a profile globally by name (not session-scoped).
+     * Prefers profiles that have actual data (messages, interests, etc.)
+     */
+    private Optional<CrushProfile> findProfileGlobally(String name) {
+        String normalizedName = normalizeName(name);
+
+        // First try exact name match (get all with that name)
+        List<CrushProfile> matches = new java.util.ArrayList<>(
+            crushProfileRepository.findByNameIgnoreCaseOrderByUpdatedAtDesc(normalizedName)
+        );
+
+        // If no exact matches, try partial/contains match
+        if (matches.isEmpty()) {
+            matches = new java.util.ArrayList<>(
+                crushProfileRepository.findByNameContainingIgnoreCaseOrderByUpdatedAtDesc(normalizedName)
+            );
+        }
+
+        // Also check display name matches and add if not already present
+        Optional<CrushProfile> displayMatch = crushProfileRepository.findFirstByDisplayNameIgnoreCaseOrderByUpdatedAtDesc(name.trim());
+        if (displayMatch.isPresent()) {
+            CrushProfile dm = displayMatch.get();
+            if (matches.stream().noneMatch(p -> p.getId().equals(dm.getId()))) {
+                matches.add(0, dm);
+            }
+        }
+
+        if (matches.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Find the profile with the most data (prefer profiles that have content)
+        CrushProfile best = matches.get(0);
+        int bestScore = scoreProfile(best);
+
+        for (CrushProfile p : matches) {
+            int score = scoreProfile(p);
+            if (score > bestScore) {
+                best = p;
+                bestScore = score;
+            }
+        }
+
+        log.info("Found best profile for '{}': id={} messageCount={} score={}",
+                name, best.getId(), best.getMessageCount(), bestScore);
+
+        return Optional.of(best);
+    }
+
+    /**
+     * Score a profile based on how much data it has
+     */
+    private int scoreProfile(CrushProfile p) {
+        int score = 0;
+        if (p.getMessageCount() != null && p.getMessageCount() > 0) score += p.getMessageCount() * 10;
+        if (p.getRecentMessages() != null && !p.getRecentMessages().isBlank()) score += 50;
+        if (p.getInterests() != null && !p.getInterests().isBlank()) score += 20;
+        if (p.getPersonality() != null && !p.getPersonality().isBlank()) score += 20;
+        if (p.getCommunicationStyle() != null && !p.getCommunicationStyle().isBlank()) score += 10;
+        if (p.getKnownFacts() != null && !p.getKnownFacts().isBlank()) score += 10;
+        return score;
     }
 
     /**
@@ -142,35 +212,8 @@ public class CrushProfileService {
     }
 
     public Optional<CrushProfile> getProfile(String sessionId, String name) {
-        String normalizedName = normalizeName(name);
-
-        // Try exact match first
-        Optional<CrushProfile> exact = crushProfileRepository.findBySessionIdAndName(sessionId, normalizedName);
-        if (exact.isPresent()) {
-            return exact;
-        }
-
-        // Try case-insensitive match
-        Optional<CrushProfile> caseInsensitive = crushProfileRepository.findBySessionIdAndNameIgnoreCase(sessionId, normalizedName);
-        if (caseInsensitive.isPresent()) {
-            return caseInsensitive;
-        }
-
-        // Try display name match
-        Optional<CrushProfile> displayNameMatch = crushProfileRepository.findBySessionIdAndDisplayNameIgnoreCase(sessionId, name.trim());
-        if (displayNameMatch.isPresent()) {
-            return displayNameMatch;
-        }
-
-        // Try partial match (first name only, or contains)
-        String firstName = normalizedName.split(" ")[0];
-        List<CrushProfile> partialMatches = crushProfileRepository.findBySessionIdAndNameContainingIgnoreCase(sessionId, firstName);
-        if (!partialMatches.isEmpty()) {
-            log.info("Found {} partial match(es) for '{}' using first name '{}'", partialMatches.size(), name, firstName);
-            return Optional.of(partialMatches.get(0));
-        }
-
-        return Optional.empty();
+        // Use global lookup - profiles are shared across sessions
+        return findProfileGlobally(name);
     }
 
     /**
@@ -182,17 +225,21 @@ public class CrushProfileService {
     }
 
     public List<CrushProfile> getAllProfiles(String sessionId) {
-        return crushProfileRepository.findBySessionIdOrderByUpdatedAtDesc(sessionId);
+        // Return all profiles globally (not session-scoped)
+        return crushProfileRepository.findAllByOrderByUpdatedAtDesc();
     }
 
     public Optional<CrushProfile> getActiveProfile(String sessionId) {
-        return crushProfileRepository.findFirstBySessionIdOrderByUpdatedAtDesc(sessionId);
+        // Get most recently updated profile globally
+        List<CrushProfile> all = crushProfileRepository.findAllByOrderByUpdatedAtDesc();
+        return all.isEmpty() ? Optional.empty() : Optional.of(all.get(0));
     }
 
     @Transactional
     public void deleteProfile(String sessionId, String name) {
-        crushProfileRepository.deleteBySessionIdAndName(sessionId, name.toLowerCase().trim());
-        log.info("Deleted profile: session={} name={}", sessionId, name);
+        String normalizedName = normalizeName(name);
+        crushProfileRepository.deleteByName(normalizedName);
+        log.info("Deleted profile globally: name={}", name);
     }
 
     public String buildProfileContext(CrushProfile profile) {

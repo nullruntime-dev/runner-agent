@@ -99,3 +99,4 @@ credentials.json
 ui/downloads/*.jar
 !ui/downloads/.gitkeep
 *.jar
+CLAUDE.md

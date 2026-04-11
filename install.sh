@@ -71,18 +71,22 @@ show_menu() {
     echo -e "  ${MAGENTA}3)${NC} ${BOLD}Build from Source${NC}"
     echo -e "     ${DIM}Clone repo and build with Gradle. Uses svcify for service management.${NC}"
     echo ""
+    echo -e "  ${YELLOW}4)${NC} ${BOLD}Ubuntu Sandbox${NC}"
+    echo -e "     ${DIM}Run in isolated Ubuntu container with systemd. Great for testing.${NC}"
+    echo ""
     echo -e "  ${RED}q)${NC} ${BOLD}Quit${NC}"
     echo ""
 
     while true; do
-        echo -n "Enter choice [1-3, q]: "
+        echo -n "Enter choice [1-4, q]: "
         read choice < /dev/tty
         case "$choice" in
             1) INSTALL_METHOD="docker"; break ;;
             2) INSTALL_METHOD="jar"; break ;;
             3) INSTALL_METHOD="source"; break ;;
+            4) INSTALL_METHOD="sandbox"; break ;;
             q|Q) echo "Cancelled."; exit 0 ;;
-            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, or q.${NC}" ;;
+            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, 4, or q.${NC}" ;;
         esac
     done
 }
@@ -203,6 +207,56 @@ install_docker() {
     log_success "Docker installed"
 }
 
+# Install via Ubuntu Sandbox (Docker container with systemd)
+install_sandbox_method() {
+    log_info "Setting up GRIPHOOK in Ubuntu Sandbox..."
+
+    # Check/install Docker
+    if ! check_docker; then
+        install_docker
+    fi
+
+    SANDBOX_IMAGE="nullruntimedev/ubuntu-systemd-sandbox:latest"
+    CONTAINER_NAME="griphook-sandbox"
+
+    # Pull the sandbox image
+    log_info "Pulling Ubuntu Sandbox image..."
+    docker pull "$SANDBOX_IMAGE"
+
+    # Stop and remove existing container if exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        log_info "Removing existing sandbox container..."
+        docker stop "$CONTAINER_NAME" 2>/dev/null || true
+        docker rm "$CONTAINER_NAME" 2>/dev/null || true
+    fi
+
+    # Run the sandbox container
+    log_info "Starting Ubuntu Sandbox container..."
+    docker run -d \
+        --name "$CONTAINER_NAME" \
+        --privileged \
+        -p 3000:3000 \
+        -p 8090:8090 \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+        --cgroupns=host \
+        "$SANDBOX_IMAGE"
+
+    # Wait for container to be ready
+    log_info "Waiting for container to start..."
+    sleep 3
+
+    # Check if container is running
+    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        log_success "Ubuntu Sandbox container is running"
+    else
+        log_error "Failed to start sandbox container"
+        docker logs "$CONTAINER_NAME"
+        exit 1
+    fi
+
+    log_success "Ubuntu Sandbox installation complete"
+}
+
 # Install via Docker Compose
 install_docker_method() {
     log_info "Installing GRIPHOOK via Docker Compose..."
@@ -243,6 +297,9 @@ EOF
     # Pull images
     log_info "Pulling Docker images..."
     $SUDO docker compose pull
+
+    # Interactive configuration
+    configure_env_interactive
 
     log_success "Docker installation complete"
 }
@@ -541,6 +598,9 @@ EOF
     # Install frontend
     install_frontend
 
+    # Interactive configuration
+    configure_env_interactive
+
     log_success "JAR installation complete"
 }
 
@@ -609,6 +669,9 @@ EOF
     # Install frontend
     install_frontend
 
+    # Interactive configuration
+    configure_env_interactive
+
     log_success "Source installation complete"
 }
 
@@ -639,6 +702,109 @@ EOF
     fi
 }
 
+# Interactive configuration for essential env variables
+configure_env_interactive() {
+    echo ""
+    echo -e "${CYAN}════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}         Quick Configuration                ${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════${NC}"
+    echo ""
+
+    echo -e "${BOLD}Would you like to configure essential settings now?${NC}"
+    echo -e "${DIM}(You can always edit ${INSTALL_DIR}/.env later)${NC}"
+    echo ""
+    echo -n "Configure now? [Y/n]: "
+    read configure_choice < /dev/tty
+
+    if [[ "$configure_choice" =~ ^[Nn]$ ]]; then
+        log_info "Skipping configuration. Edit ${INSTALL_DIR}/.env manually."
+        return
+    fi
+
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}1. Google AI API Key ${RED}(Required for AI Chat)${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "   Get your free API key at:"
+    echo -e "   ${CYAN}https://aistudio.google.com/apikey${NC}"
+    echo ""
+    echo -n "   Enter your Google AI API Key: "
+    read -r google_api_key < /dev/tty
+
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}2. Agent Token ${DIM}(API Authentication)${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "   This token secures your GRIPHOOK API."
+    echo -e "   ${DIM}Press Enter to auto-generate a secure token, or enter your own.${NC}"
+    echo ""
+    echo -n "   Enter Agent Token [auto-generate]: "
+    read -r agent_token < /dev/tty
+
+    # Auto-generate token if empty
+    if [ -z "$agent_token" ]; then
+        if command -v openssl &> /dev/null; then
+            agent_token=$(openssl rand -hex 32)
+        else
+            agent_token=$(head -c 32 /dev/urandom | xxd -p | tr -d '\n')
+        fi
+        echo -e "   ${GREEN}Generated:${NC} ${agent_token:0:16}..."
+    fi
+
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}3. Server Port ${DIM}(Default: 8090)${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -n "   Enter Server Port [8090]: "
+    read -r server_port < /dev/tty
+    server_port=${server_port:-8090}
+
+    # Update the .env file
+    log_info "Updating configuration..."
+
+    ENV_FILE="${INSTALL_DIR}/.env"
+
+    # Helper function to update or add env variable
+    update_env_var() {
+        local key="$1"
+        local value="$2"
+        if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+            $SUDO sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+        else
+            echo "${key}=${value}" | $SUDO tee -a "$ENV_FILE" > /dev/null
+        fi
+    }
+
+    if [ -n "$google_api_key" ]; then
+        update_env_var "GOOGLE_AI_API_KEY" "$google_api_key"
+    fi
+
+    if [ -n "$agent_token" ]; then
+        update_env_var "AGENT_TOKEN" "$agent_token"
+    fi
+
+    if [ -n "$server_port" ]; then
+        update_env_var "SERVER_PORT" "$server_port"
+    fi
+
+    echo ""
+    log_success "Configuration saved to ${ENV_FILE}"
+
+    # Show summary
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}         Configuration Summary              ${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "   ${CYAN}Google AI API Key:${NC} ${google_api_key:+configured}${google_api_key:-not set}"
+    echo -e "   ${CYAN}Agent Token:${NC}       ${agent_token:0:16}..."
+    echo -e "   ${CYAN}Server Port:${NC}       ${server_port}"
+    echo ""
+}
+
 # Install svcify for service management
 install_svcify() {
     if command -v svcify &> /dev/null; then
@@ -648,15 +814,15 @@ install_svcify() {
 
     log_info "Installing svcify for service management..."
 
-    # Install svcify from GitHub
-    SVCIFY_URL="https://raw.githubusercontent.com/noodlescripter/svcify/main/install.sh"
+    # Install svcify from GitHub (auto-confirm with 'y')
+    SVCIFY_URL="https://raw.githubusercontent.com/noodlescripter/svcify/main/svcify.sh"
 
-    if curl -fsSL "$SVCIFY_URL" | $SUDO bash; then
+    if echo "y" | curl -fsSL "$SVCIFY_URL" | $SUDO bash; then
         log_success "svcify installed"
         return 0
     else
         log_warn "Could not install svcify automatically"
-        log_info "Install manually: curl -fsSL $SVCIFY_URL | sudo bash"
+        log_info "Install manually: curl -fsSL $SVCIFY_URL | bash"
         return 1
     fi
 }
@@ -774,6 +940,23 @@ print_next_steps() {
             echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
             echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
             ;;
+        sandbox)
+            echo -e "  ${CYAN}1.${NC} Enter the sandbox container:"
+            echo -e "     ${YELLOW}docker exec -it griphook-sandbox bash${NC}"
+            echo ""
+            echo -e "  ${CYAN}2.${NC} Inside the container, install GRIPHOOK:"
+            echo -e "     ${YELLOW}curl -fsSL https://griphook.dev/install.sh | bash${NC}"
+            echo -e "     ${DIM}Then choose option 2 (Standalone JAR) or 3 (Build from Source)${NC}"
+            echo ""
+            echo -e "  ${CYAN}3.${NC} Container management:"
+            echo -e "     ${YELLOW}docker stop griphook-sandbox${NC}     # Stop"
+            echo -e "     ${YELLOW}docker start griphook-sandbox${NC}    # Start"
+            echo -e "     ${YELLOW}docker logs griphook-sandbox${NC}     # View logs"
+            echo ""
+            echo -e "  ${CYAN}4.${NC} Access from host (after installing inside):"
+            echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
+            echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
+            ;;
     esac
 
     echo ""
@@ -797,6 +980,10 @@ parse_args() {
                 INSTALL_METHOD="source"
                 shift
                 ;;
+            --sandbox)
+                INSTALL_METHOD="sandbox"
+                shift
+                ;;
             --help|-h)
                 echo "GRIPHOOK Installer"
                 echo ""
@@ -804,8 +991,9 @@ parse_args() {
                 echo ""
                 echo "Options:"
                 echo "  --docker    Install via Docker Compose (recommended)"
-                echo "  --jar       Install standalone JAR with systemd service"
-                echo "  --source    Build from source"
+                echo "  --jar       Install standalone JAR with svcify service"
+                echo "  --source    Build from source with svcify service"
+                echo "  --sandbox   Run in Ubuntu sandbox container (for testing)"
                 echo "  --help      Show this help message"
                 echo ""
                 echo "Environment variables:"
@@ -845,6 +1033,9 @@ main() {
             ;;
         source)
             install_source_method
+            ;;
+        sandbox)
+            install_sandbox_method
             ;;
     esac
 

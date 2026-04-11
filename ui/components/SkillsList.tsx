@@ -98,7 +98,7 @@ export default function SkillsList({ agentId, skills, onRefresh }: SkillsListPro
   return (
     <>
       <div className="space-y-1 p-1">
-        {skills.map((skill) => {
+        {skills.filter(s => !s.hidden).map((skill) => {
           const colors = skillColors[skill.icon] || defaultColors;
           const isActive = skill.configured && skill.enabled;
 

@@ -112,6 +112,30 @@ public class SkillsController {
         ));
     }
 
+    @PostMapping("/{skillName}/visibility")
+    public ResponseEntity<Map<String, Object>> toggleVisibility(
+            @PathVariable String skillName,
+            @RequestBody VisibilityRequest request
+    ) {
+        log.info("POST /agent/skills/{}/visibility hidden={}", skillName, request.hidden());
+
+        try {
+            skillService.toggleVisibility(skillName, request.hidden());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "skillName", skillName,
+                    "hidden", request.hidden()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+
     public record ConfigureRequest(Map<String, String> config, Boolean enabled) {}
     public record ToggleRequest(boolean enabled) {}
+    public record VisibilityRequest(boolean hidden) {}
 }

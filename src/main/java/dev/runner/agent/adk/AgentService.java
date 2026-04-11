@@ -24,6 +24,7 @@ import com.google.adk.tools.FunctionTool;
 import com.google.genai.types.Content;
 import com.google.genai.types.Part;
 import dev.runner.agent.adk.tools.*;
+import dev.runner.agent.service.ChatService;
 import io.reactivex.rxjava3.core.Flowable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Service
@@ -46,7 +48,7 @@ public class AgentService {
             - Check the status of running or past executions
             - View execution logs and troubleshoot failures
             - Cancel running executions
-            - Send notifications to Slack (if configured)
+            - Send notifications to Slack (if configured)a
             - Send emails via Gmail or SMTP (if configured)
             - Read, search, and manage Gmail emails via Gmail API (if configured)
             - Help with flirting and dating conversations (if configured)
@@ -55,11 +57,11 @@ public class AgentService {
             1. Use the execute_commands tool with a descriptive name
             2. IMMEDIATELY call get_execution_status with wait_for_completion=true to wait for the execution to finish
             3. Once complete, report the final status, exit code, and step outputs to the user
-            4. If the execution failed, show the error and relevant output from the failed step
+            4. If the execution failed, show the error and relevant output from tawesomehe failed step
             5. Do NOT ask the user if they want to check status - just do it automatically
             6. If asked, send a Slack or email notification about the deployment
 
-            CRITICAL WORKFLOW: After executing a command, you MUST:
+            CRITICAL WORKFLOW: After ok executing a command, you MUST:
             1. Call get_execution_status(execution_id, wait_for_completion=true)
             2. This will automatically wait until the execution completes
             3. Report the results directly to the user with the output
@@ -179,6 +181,7 @@ public class AgentService {
     private final InMemoryRunner runner;
     private final RunConfig runConfig;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final ChatService chatService;
 
     public AgentService(
             AdkConfig adkConfig,
@@ -193,7 +196,9 @@ public class AgentService {
             SmtpTool smtpTool,
             FlirtTool flirtTool,
             CustomSkillTool customSkillTool,
-            ScheduleTool scheduleTool
+            ScheduleTool scheduleTool,
+            // WebSearchTool webSearchTool,  // Disabled until Google API key issues are resolved
+            ChatService chatService
     ) {
         log.info("Initializing ADK AgentService with model={}", adkConfig.getModel());
 
@@ -263,6 +268,12 @@ public class AgentService {
         tools.add(FunctionTool.create(scheduleTool, "runScheduleNow"));
         log.info("Scheduled Tasks tools registered - autopilot mode enabled!");
 
+        // Web Search tools - disabled until Google API key issues are resolved
+        // tools.add(FunctionTool.create(webSearchTool, "search"));
+        // tools.add(FunctionTool.create(webSearchTool, "searchNews"));
+        // tools.add(FunctionTool.create(webSearchTool, "searchSite"));
+        // log.info("Web Search tools registered (configuration checked at runtime)");
+
         LlmAgent agent = LlmAgent.builder()
                 .name("runner-assistant")
                 .description("A deployment assistant that executes commands and monitors executions")
@@ -273,6 +284,7 @@ public class AgentService {
 
         this.runner = new InMemoryRunner(agent);
         this.runConfig = RunConfig.builder().build();
+        this.chatService = chatService;
 
         log.info("ADK AgentService initialized successfully with {} tools", tools.size());
     }
@@ -283,6 +295,10 @@ public class AgentService {
         }
 
         log.info("Processing chat sessionId={} message={}", sessionId, message);
+
+        // Persist chat session and user message
+        chatService.getOrCreateSession(sessionId);
+        chatService.saveUserMessage(sessionId, message);
 
         // Set session context for FlirtTool profile tracking
         FlirtTool.setCurrentSession(sessionId);
@@ -313,6 +329,9 @@ public class AgentService {
                 response = "I processed your request but have no additional response.";
             }
 
+            // Persist assistant response
+            chatService.saveAssistantMessage(sessionId, response);
+
             log.info("Chat completed sessionId={} responseLength={}", sessionId, response.length());
 
             return new ChatResult(sessionId, response);
@@ -328,14 +347,39 @@ public class AgentService {
 
         log.info("Processing streaming chat sessionId={} message={}", sessionId, message);
 
+        // Persist chat session and user message
+        chatService.getOrCreateSession(sessionId);
+        chatService.saveUserMessage(sessionId, message);
+
         // Set session context for FlirtTool profile tracking
         FlirtTool.setCurrentSession(sessionId);
 
         Session session = getOrCreateSession(sessionId);
         Content userMsg = Content.fromParts(Part.fromText(message));
 
+        // Accumulate response for persistence
+        AtomicReference<StringBuilder> responseBuilder = new AtomicReference<>(new StringBuilder());
+        String finalSessionId = sessionId;
+
         return runner.runAsync(session.userId(), session.id(), userMsg, runConfig)
-                .doFinally(FlirtTool::clearCurrentSession);
+                .doOnNext(event -> {
+                    if (event.finalResponse()) {
+                        String content = event.stringifyContent();
+                        String transformed = transformAdkContent(content);
+                        if (transformed != null) {
+                            responseBuilder.get().append(transformed);
+                        }
+                    }
+                })
+                .doFinally(() -> {
+                    FlirtTool.clearCurrentSession();
+                    // Persist accumulated assistant response
+                    String response = responseBuilder.get().toString();
+                    if (!response.isBlank()) {
+                        chatService.saveAssistantMessage(finalSessionId, response);
+                        log.debug("Persisted streaming response sessionId={} length={}", finalSessionId, response.length());
+                    }
+                });
     }
 
     public String getSessionId(String sessionId) {
@@ -357,6 +401,8 @@ public class AgentService {
 
     public void clearSession(String sessionId) {
         sessions.remove(sessionId);
+        // Archive the persisted chat session
+        chatService.archiveSession(sessionId);
         log.info("Cleared session id={}", sessionId);
     }
 

@@ -394,7 +394,9 @@ public class GmailApiService {
         Session session = Session.getDefaultInstance(props, null);
         MimeMessage email = new MimeMessage(session);
 
-        email.setFrom(new InternetAddress(getAuthorizedEmail()));
+        String fromEmail = getAuthorizedEmail();
+        email.setFrom(new InternetAddress(fromEmail));
+        email.setReplyTo(new InternetAddress[] { new InternetAddress(fromEmail) });
         email.addRecipient(javax.mail.Message.RecipientType.TO, new InternetAddress(to));
         if (cc != null && !cc.isBlank()) {
             for (String ccAddr : cc.split(",")) {
@@ -402,7 +404,13 @@ public class GmailApiService {
             }
         }
         email.setSubject(subject);
-        email.setText(body);
+        email.setText(body, "UTF-8");
+
+        // Add headers that help with spam filtering
+        email.setSentDate(new java.util.Date());
+        email.setHeader("MIME-Version", "1.0");
+        email.setHeader("X-Mailer", "Runner Agent");
+        email.setHeader("X-Priority", "3"); // Normal priority
 
         return email;
     }
@@ -413,11 +421,20 @@ public class GmailApiService {
         Session session = Session.getDefaultInstance(props, null);
         MimeMessage email = new MimeMessage(session);
 
-        email.setFrom(new InternetAddress(getAuthorizedEmail()));
+        String fromEmail = getAuthorizedEmail();
+        email.setFrom(new InternetAddress(fromEmail));
+        email.setReplyTo(new InternetAddress[] { new InternetAddress(fromEmail) });
         email.addRecipient(javax.mail.Message.RecipientType.TO, new InternetAddress(to));
         email.setSubject(subject);
-        email.setText(body);
+        email.setText(body, "UTF-8");
 
+        // Add headers that help with spam filtering
+        email.setSentDate(new java.util.Date());
+        email.setHeader("MIME-Version", "1.0");
+        email.setHeader("X-Mailer", "Runner Agent");
+        email.setHeader("X-Priority", "3");
+
+        // Threading headers
         if (inReplyTo != null) {
             email.setHeader("In-Reply-To", inReplyTo);
         }

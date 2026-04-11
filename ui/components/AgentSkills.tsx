@@ -117,7 +117,7 @@ export default function AgentSkills({ agentId, isOnline }: AgentSkillsProps) {
     );
   }
 
-  const enabledCustomSkills = customSkills.filter(s => s.enabled);
+  const enabledCustomSkills = customSkills.filter(s => s.enabled && !s.hidden);
 
   return (
     <div className="space-y-1">
@@ -133,7 +133,7 @@ export default function AgentSkills({ agentId, isOnline }: AgentSkillsProps) {
             </span>
           </div>
           <div className="space-y-1 p-1">
-            {customSkills.map((skill) => {
+            {customSkills.filter(s => !s.hidden).map((skill) => {
               const typeColors = {
                 COMMAND: { bg: 'bg-[#00aaff]/10', text: 'text-[#00aaff]', border: 'border-[#00aaff]/30' },
                 PROMPT: { bg: 'bg-[#aa00ff]/10', text: 'text-[#aa00ff]', border: 'border-[#aa00ff]/30' },

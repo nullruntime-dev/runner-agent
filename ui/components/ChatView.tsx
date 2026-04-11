@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage as ChatMessageType, Skill, getSkills, getChatStreamUrl, CustomSkill, getCustomSkills } from '@/lib/api';
+import { ChatMessage as ChatMessageType, Skill, getSkills, getChatStreamUrl, CustomSkill, getCustomSkills, getChatSession } from '@/lib/api';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 
@@ -10,6 +10,8 @@ interface ChatViewProps {
   selectedSkill?: string | null;
   onSelectSkill?: (skillName: string | null) => void;
   externalSkills?: Skill[];
+  sessionId?: string | null;
+  onSessionChange?: (sessionId: string) => void;
 }
 
 const skillModePrompts: Record<string, { prefix: string; placeholder: string; color: string; quickActions: { label: string; message: string }[] }> = {
@@ -89,11 +91,21 @@ export default function ChatView({
   agentId,
   selectedSkill: externalSelectedSkill,
   onSelectSkill: externalOnSelectSkill,
-  externalSkills
+  externalSkills,
+  sessionId: externalSessionId,
+  onSessionChange,
 }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
-  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID()); // Generate once on mount
+  const [internalSessionId, setInternalSessionId] = useState<string>(() => crypto.randomUUID());
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Use external session ID if provided, otherwise use internal
+  const sessionId = externalSessionId ?? internalSessionId;
+  const setSessionId = (id: string) => {
+    setInternalSessionId(id);
+    onSessionChange?.(id);
+  };
   const [streamingContent, setStreamingContent] = useState('');
   const [internalSkills, setInternalSkills] = useState<Skill[]>([]);
   const [internalCustomSkills, setInternalCustomSkills] = useState<CustomSkill[]>([]);
@@ -124,6 +136,47 @@ export default function ChatView({
       setShowScrollButton(!isNearBottom && messages.length > 0);
     }
   }, [messages.length]);
+
+  // When external session becomes null (New Chat clicked), generate fresh internal ID
+  useEffect(() => {
+    if (externalSessionId === null) {
+      setInternalSessionId(crypto.randomUUID());
+      setMessages([]);
+      setStreamingContent('');
+    }
+  }, [externalSessionId]);
+
+  // Load session history when sessionId changes (from external prop)
+  // Skip if the external ID matches our internal ID (we already have the data locally)
+  useEffect(() => {
+    if (!externalSessionId) return;
+    if (externalSessionId === internalSessionId) return; // Already have local data
+
+    const loadHistory = async () => {
+      setIsLoadingHistory(true);
+      try {
+        const session = await getChatSession(agentId, externalSessionId);
+        if (session?.messages && session.messages.length > 0) {
+          const loadedMessages: ChatMessageType[] = session.messages.map((msg) => ({
+            id: String(msg.id),
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: msg.createdAt,
+          }));
+          setMessages(loadedMessages);
+        } else {
+          setMessages([]);
+        }
+      } catch (err) {
+        console.error('Failed to load session history:', err);
+        setMessages([]);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, [agentId, externalSessionId, internalSessionId]);
 
   // Fetch skills on mount (only if not using external skills)
   useEffect(() => {
@@ -186,6 +239,11 @@ export default function ChatView({
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setStreamingContent('');
+
+    // Notify parent of the session ID being used (for sidebar tracking)
+    if (!externalSessionId && onSessionChange) {
+      onSessionChange(sessionId);
+    }
 
     try {
       const url = getChatStreamUrl(agentId, sessionId, messageToSend);
@@ -397,8 +455,21 @@ export default function ChatView({
           background: 'linear-gradient(180deg, #050505 0%, #0a0a0a 100%)',
         }}
       >
+        {/* Loading history state */}
+        {isLoadingHistory && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="flex items-center gap-3 text-[#666]">
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span className="text-sm">Loading conversation...</span>
+            </div>
+          </div>
+        )}
+
         {/* Empty state */}
-        {messages.length === 0 && !streamingContent && (
+        {messages.length === 0 && !streamingContent && !isLoadingHistory && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className={`w-20 h-20 flex items-center justify-center mb-6 ${
               selectedSkill === 'flirt'
@@ -493,9 +564,7 @@ export default function ChatView({
           <div className="flex justify-start">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-br from-[#00fff2] to-[#ff00ea] flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
+                <span className="text-white font-bold text-sm">GH</span>
               </div>
               <div className="bg-[#111] border border-[#1a1a1a] px-4 py-3">
                 <div className="flex items-center gap-1.5">

@@ -146,14 +146,36 @@ export default async function AgentDetailPage({ params }: PageProps) {
         )}
 
         <div className="grid grid-cols-12 gap-6">
-          {/* Skills Panel */}
-          <div className="col-span-3">
+          {/* Left Sidebar - Skills & Autopilot Link */}
+          <div className="col-span-3 space-y-6">
+            {/* Skills Panel */}
             <div className="bg-[#0a0a0a] border border-[#1a1a1a]">
               <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center justify-between">
                 <h2 className="text-xs font-semibold text-[#888] uppercase tracking-wider">Skills</h2>
               </div>
               <AgentSkills agentId={agentId} isOnline={isOnline} />
             </div>
+
+            {/* Autopilot Link */}
+            <Link
+              href={`/agents/${agentId}/autopilot`}
+              className="block bg-[#0a0a0a] border border-[#1a1a1a] p-4 hover:bg-[#111] transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#00fff2]/10 border border-[#00fff2]/30 flex items-center justify-center group-hover:bg-[#00fff2]/20 transition-colors">
+                  <svg className="w-5 h-5 text-[#00fff2]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-white group-hover:text-[#00fff2] transition-colors">Autopilot</h3>
+                  <p className="text-xs text-[#666]">Manage scheduled tasks</p>
+                </div>
+                <svg className="w-4 h-4 text-[#444] group-hover:text-[#00fff2] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
           </div>
 
           {/* Executions Panel */}

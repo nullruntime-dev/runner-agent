@@ -1,0 +1,11 @@
+{
+  "googleAiApiKey": "adad",
+  "agentToken": "567b9cbebcac49b7200eb21199883c5f49bb29e173af30b0fe713b7fd6c1dee1",
+  "agentAdkModel": "gemini-2.0-flash",
+  "agentAdkEnabled": true,
+  "serverPort": "8090",
+  "agentWorkingDir": "/tmp",
+  "agentDefaultShell": "/bin/bash",
+  "agentMaxConcurrent": "5",
+  "setupComplete": true
+}

@@ -153,6 +153,7 @@ export interface Skill {
   configFields: SkillConfigField[];
   configured: boolean;
   enabled: boolean;
+  hidden?: boolean;
 }
 
 export async function getSkills(agentId: string): Promise<Skill[]> {
@@ -181,6 +182,19 @@ export async function deactivateSkill(
 ): Promise<{ success: boolean; error?: string }> {
   const res = await fetch(`/api/agents/${agentId}/skills/${skillName}`, {
     method: 'DELETE',
+  });
+  return res.json();
+}
+
+export async function toggleSkillVisibility(
+  agentId: string,
+  skillName: string,
+  hidden: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}/visibility`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hidden }),
   });
   return res.json();
 }
@@ -234,6 +248,7 @@ export interface CustomSkill {
   definitionJson: string;
   icon: string;
   enabled: boolean;
+  hidden?: boolean;
   executionCount: number;
   createdAt: string;
   updatedAt: string | null;
@@ -324,6 +339,19 @@ export async function toggleCustomSkill(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
+  });
+  return res.json();
+}
+
+export async function toggleCustomSkillVisibility(
+  agentId: string,
+  name: string,
+  hidden: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/visibility`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hidden }),
   });
   return res.json();
 }
@@ -442,4 +470,98 @@ export async function deleteScheduledTask(
     method: 'DELETE',
   });
   return res.json();
+}
+
+export interface UpdateScheduleRequest {
+  name?: string;
+  description?: string;
+  type?: ScheduledTaskType;
+  action?: string;
+  scheduleType?: ScheduleType;
+  timeOfDay?: string;
+  dayOfWeek?: number;
+  intervalMinutes?: number;
+  cronExpression?: string;
+  notificationTarget?: NotificationTarget;
+  enabled?: boolean;
+}
+
+export async function updateScheduledTask(
+  agentId: string,
+  scheduleId: number,
+  request: UpdateScheduleRequest
+): Promise<{ success: boolean; task?: ScheduledTask; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  return res.json();
+}
+
+// Chat Session types and functions
+
+export interface ChatSessionMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages?: ChatSessionMessage[];
+  messageCount: number;
+}
+
+export async function getChatSessions(
+  agentId: string,
+  limit: number = 50
+): Promise<ChatSession[]> {
+  try {
+    const res = await fetch(`/api/agents/${agentId}/sessions?limit=${limit}`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error('Failed to fetch chat sessions:', res.status);
+      return [];
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching chat sessions:', err);
+    return [];
+  }
+}
+
+export async function getChatSession(
+  agentId: string,
+  sessionId: string
+): Promise<ChatSession | null> {
+  try {
+    const res = await fetch(`/api/agents/${agentId}/sessions/${sessionId}`, { cache: 'no-store' });
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error('Failed to fetch chat session');
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching chat session:', err);
+    return null;
+  }
+}
+
+export async function deleteChatSession(
+  agentId: string,
+  sessionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`/api/agents/${agentId}/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    return res.json();
+  } catch (err) {
+    console.error('Error deleting chat session:', err);
+    return { success: false, error: 'Failed to delete session' };
+  }
 }

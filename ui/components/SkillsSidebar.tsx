@@ -201,13 +201,13 @@ export default function SkillsSidebar({
     );
   }
 
-  const enabledCustomSkills = customSkills.filter(s => s.enabled);
+  const enabledCustomSkills = customSkills.filter(s => s.enabled && !s.hidden);
 
   return (
     <>
       <div className="space-y-1 p-1">
         {/* Built-in skills */}
-        {skills.map((skill) => {
+        {skills.filter(s => !s.hidden).map((skill) => {
           const colors = skillColors[skill.icon] || defaultColors;
           const isActive = skill.configured && skill.enabled;
           const isSelected = selectedSkill === skill.name;

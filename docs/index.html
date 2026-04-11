@@ -329,10 +329,10 @@
 
     /* Hero */
     .hero {
-      min-height: 100vh;
+      min-height: calc(100vh - 200px);
       display: flex;
       align-items: center;
-      padding: 120px 0 80px;
+      padding: 60px 0 80px;
       position: relative;
       z-index: 1;
     }
@@ -426,6 +426,7 @@
 
     .hero-visual {
       position: relative;
+      width: 100%;
     }
 
     .terminal {
@@ -470,21 +471,12 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
-    .terminal-body {
-      padding: 24px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      line-height: 2;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
     .terminal-line {
       display: flex;
       gap: 12px;
-      opacity: 0;
-      animation: typeIn 0.5s forwards;
+      opacity: 1;
       white-space: nowrap;
+      min-height: 26px;
     }
 
     @media (max-width: 600px) {
@@ -494,67 +486,369 @@
       }
     }
 
-    .terminal-line:nth-child(1) { animation-delay: 0.5s; }
-    .terminal-line:nth-child(2) { animation-delay: 1s; }
-    .terminal-line:nth-child(3) { animation-delay: 1.5s; }
-    .terminal-line:nth-child(4) { animation-delay: 2s; }
-    .terminal-line:nth-child(5) { animation-delay: 2.5s; }
-
-    @keyframes typeIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-
     .terminal-prompt { color: var(--cyan); }
     .terminal-cmd { color: var(--text-primary); }
     .terminal-flag { color: var(--magenta); }
     .terminal-string { color: var(--yellow); }
     .terminal-success { color: var(--lime); }
+    .terminal-error { color: var(--red); }
     .terminal-muted { color: var(--text-muted); }
+    .terminal-ai { color: var(--magenta); }
+    .terminal-output { color: #aaa; }
+    .terminal-heart { color: #ff6b9d; }
 
     .cursor {
       display: inline-block;
       width: 10px;
       height: 18px;
       background: var(--cyan);
-      animation: cursorBlink 1s infinite;
+      animation: cursorBlink 0.8s infinite;
       vertical-align: middle;
-      margin-left: 4px;
+      margin-left: 2px;
+      box-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan);
     }
 
     @keyframes cursorBlink {
-      0%, 50% { opacity: 1; }
-      51%, 100% { opacity: 0; }
+      0%, 45% { opacity: 1; }
+      50%, 100% { opacity: 0; }
     }
 
-    /* Stats bar */
-    .stats {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
+    .terminal-body {
+      padding: 40px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      line-height: 2.4;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
       position: relative;
       z-index: 1;
+      min-height: 500px;
+    }
+
+    /* Scene transition */
+    .terminal-scene {
+      transition: opacity 0.3s ease;
+    }
+
+    .terminal-scene.fade-out {
+      opacity: 0;
+    }
+
+    /* Typing animation for individual characters */
+    .typed-char {
+      opacity: 0;
+      animation: charAppear 0.05s forwards;
+    }
+
+    @keyframes charAppear {
+      to { opacity: 1; }
+    }
+
+    /* Glow effect on terminal */
+    .terminal {
       background: var(--bg-secondary);
+      border: 1px solid var(--border-bright);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(0, 255, 242, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5);
     }
 
-    .stats-grid {
+    .terminal:hover {
+      box-shadow: 0 0 80px rgba(0, 255, 242, 0.15), inset 0 0 60px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Progress bar animation */
+    .progress-bar {
+      display: inline-block;
+      width: 200px;
+      height: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+      width: 0%;
+      transition: width 0.1s linear;
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    /* Spinner animation */
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--border-bright);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Scene indicator dots */
+    .scene-indicators {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .scene-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--border-bright);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .scene-dot.active {
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    .scene-dot:hover {
+      background: var(--cyan);
+    }
+
+    /* Skills Ticker */
+    .skills-ticker {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .skills-ticker::before,
+    .skills-ticker::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .skills-ticker::before {
+      left: 0;
+      background: linear-gradient(90deg, var(--bg-secondary), transparent);
+    }
+
+    .skills-ticker::after {
+      right: 0;
+      background: linear-gradient(270deg, var(--bg-secondary), transparent);
+    }
+
+    .ticker-wrapper {
+      width: 100%;
+    }
+
+    .ticker-track {
+      display: flex;
+      width: max-content;
+      animation: tickerScroll 30s linear infinite;
+    }
+
+    .ticker-track:hover {
+      animation-play-state: paused;
+    }
+
+    @keyframes tickerScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-content {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .ticker-icon {
+      font-size: 18px;
+    }
+
+    .ticker-arrow {
+      color: var(--cyan);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 0 10px;
+      text-shadow: 0 0 10px var(--cyan);
+    }
+
+    @media (max-width: 768px) {
+      .ticker-item {
+        font-size: 12px;
+        padding: 6px 12px;
+      }
+
+      .ticker-arrow {
+        font-size: 14px;
+        padding: 0 6px;
+      }
+    }
+
+    /* Security Warning */
+    .security-warning {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 32px;
+    }
+
+    .security-warning-inner {
+      background: rgba(255, 68, 0, 0.08);
+      border: 1px solid rgba(255, 68, 0, 0.4);
+      padding: 24px 32px;
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .security-warning-icon {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      color: #ff4400;
+    }
+
+    .security-warning-content h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ff4400;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .security-warning-content p {
+      font-size: 14px;
+      color: #ccc;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .security-warning-content p strong {
+      color: #fff;
+    }
+
+    .security-warning-content .muted {
+      color: #888;
+    }
+
+    .tunnel-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .tunnel-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--cyan);
+      background: rgba(0, 255, 242, 0.1);
+      border: 1px solid rgba(0, 255, 242, 0.3);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .tunnel-link:hover {
+      color: #fff;
+      background: rgba(0, 255, 242, 0.2);
+      border-color: var(--cyan);
+    }
+
+    .tunnel-link svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .security-warning-inner {
+        flex-direction: column;
+        padding: 20px;
+      }
+
+      .tunnel-links {
+        flex-direction: column;
+      }
+
+      .tunnel-link {
+        justify-content: center;
+      }
+    }
+
+    /* Hero Stats */
+    .hero-stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 40px;
+      grid-template-columns: repeat(4, auto);
+      gap: 56px;
+      margin-top: 56px;
+      padding-top: 40px;
+      border-top: 1px solid var(--border);
     }
 
-    @media (max-width: 800px) {
-      .stats-grid {
+    @media (max-width: 1000px) {
+      .hero-stats {
+        justify-content: center;
+        gap: 40px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .hero-stats {
         grid-template-columns: repeat(2, 1fr);
+        gap: 28px;
       }
     }
 
     .stat {
-      text-align: center;
+      text-align: left;
+    }
+
+    @media (max-width: 1000px) {
+      .stat {
+        text-align: center;
+      }
     }
 
     .stat-value {
-      font-size: 48px;
+      font-size: 44px;
       font-weight: 700;
       letter-spacing: -2px;
       margin-bottom: 8px;
@@ -1563,16 +1857,14 @@
       }
 
       /* Stats mobile */
-      .stats {
-        padding: 40px 0;
-      }
-
-      .stats-grid {
+      .hero-stats {
         gap: 24px;
+        margin-top: 40px;
+        padding-top: 32px;
       }
 
       .stat-value {
-        font-size: 36px;
+        font-size: 32px;
       }
 
       /* Section headers mobile */
@@ -2071,44 +2363,40 @@
             </a>
             <a href="#how-it-works" class="btn btn-outline">Learn More</a>
           </div>
+          <div class="hero-stats">
+            <div class="stat reveal">
+              <div class="stat-value">100<span class="accent">%</span></div>
+              <div class="stat-label">Self-Hosted</div>
+            </div>
+            <div class="stat reveal reveal-delay-1">
+              <div class="stat-value"><span class="accent">&lt;</span>10<span class="accent">s</span></div>
+              <div class="stat-label">Deploy Time</div>
+            </div>
+            <div class="stat reveal reveal-delay-2">
+              <div class="stat-value">6<span class="accent">+</span></div>
+              <div class="stat-label">Built-in Skills</div>
+            </div>
+            <div class="stat reveal reveal-delay-3">
+              <div class="stat-value"><span class="accent">∞</span></div>
+              <div class="stat-label">Possibilities</div>
+            </div>
+          </div>
         </div>
         <div class="hero-visual">
-          <div class="terminal">
+          <div class="terminal" id="heroTerminal">
             <div class="terminal-header">
               <div class="terminal-dot red"></div>
               <div class="terminal-dot yellow"></div>
               <div class="terminal-dot green"></div>
-              <span class="terminal-title">griphook — install</span>
+              <span class="terminal-title" id="terminalTitle">griphook</span>
             </div>
             <div class="terminal-body">
-              <div class="terminal-line">
-                <span class="terminal-muted"># One-liner install</span>
+              <div class="terminal-scene" id="terminalScene">
+                <!-- Content will be dynamically generated -->
               </div>
-              <div class="terminal-line">
-                <span class="terminal-prompt">$</span>
-                <span class="terminal-cmd">curl</span>
-                <span class="terminal-flag">-fsSL</span>
-                <span class="terminal-string">https://griphook.dev/install.sh</span>
-                <span class="terminal-muted">|</span>
-                <span class="terminal-cmd">bash</span>
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Select: [1] Docker (Recommended)</span>
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Installing Docker...</span>
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-muted">→</span>
-                <span class="terminal-muted">Pulling images...</span>
-              </div>
-              <div class="terminal-line">
-                <span class="terminal-success">✓</span>
-                <span class="terminal-success">GRIPHOOK installed to /opt/griphook</span>
-                <span class="cursor"></span>
-              </div>
+            </div>
+            <div class="scene-indicators" id="sceneIndicators">
+              <!-- Dots will be dynamically generated -->
             </div>
           </div>
         </div>
@@ -2116,25 +2404,63 @@
     </div>
   </section>
 
-  <!-- Stats -->
-  <section class="stats">
-    <div class="container">
-      <div class="stats-grid">
-        <div class="stat reveal">
-          <div class="stat-value">100<span class="accent">%</span></div>
-          <div class="stat-label">Self-Hosted</div>
+  <!-- Skills Ticker -->
+  <section class="skills-ticker">
+    <div class="ticker-wrapper">
+      <div class="ticker-track">
+        <div class="ticker-content">
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">⚡</span> Shell Commands</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">💬</span> Slack Notifications</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📧</span> Gmail API</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🤖</span> AI Chat</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">⏰</span> Scheduled Tasks</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🔧</span> Custom Skills</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📊</span> Real-time Logs</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🚀</span> CI/CD Pipelines</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🔐</span> Self-Hosted</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">💌</span> SMTP Email</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🎯</span> Autopilot Mode</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📱</span> REST API</span>
+          <span class="ticker-arrow">→→→</span>
         </div>
-        <div class="stat reveal reveal-delay-1">
-          <div class="stat-value"><span class="accent">&lt;</span>10<span class="accent">s</span></div>
-          <div class="stat-label">Deploy Time</div>
-        </div>
-        <div class="stat reveal reveal-delay-2">
-          <div class="stat-value">6<span class="accent">+</span></div>
-          <div class="stat-label">Built-in Skills</div>
-        </div>
-        <div class="stat reveal reveal-delay-3">
-          <div class="stat-value"><span class="accent">∞</span></div>
-          <div class="stat-label">Possibilities</div>
+        <div class="ticker-content" aria-hidden="true">
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">⚡</span> Shell Commands</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">💬</span> Slack Notifications</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📧</span> Gmail API</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🤖</span> AI Chat</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">⏰</span> Scheduled Tasks</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🔧</span> Custom Skills</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📊</span> Real-time Logs</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🚀</span> CI/CD Pipelines</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🔐</span> Self-Hosted</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">💌</span> SMTP Email</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">🎯</span> Autopilot Mode</span>
+          <span class="ticker-arrow">→→→</span>
+          <span class="ticker-item"><span class="ticker-icon">📱</span> REST API</span>
+          <span class="ticker-arrow">→→→</span>
         </div>
       </div>
     </div>
@@ -2357,6 +2683,45 @@
         <p class="section-subtitle">Follow these steps to deploy your own Griphook instance.</p>
       </div>
 
+      <!-- Security Warning -->
+      <div class="security-warning reveal">
+        <div class="security-warning-inner">
+          <svg class="security-warning-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div class="security-warning-content">
+            <h3>Private Deployment Only</h3>
+            <p>
+              <strong>Do not expose GRIPHOOK to the public internet.</strong> This system executes shell commands on your servers and should only be deployed in a private, secured environment accessible to you and authorized personnel only.
+            </p>
+            <p class="muted">
+              For secure remote access, use a zero-trust tunnel solution:
+            </p>
+            <div class="tunnel-links">
+              <a href="https://www.cloudflare.com/products/tunnel/" target="_blank" rel="noopener noreferrer" class="tunnel-link">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16.5088 16.8447C16.5088 16.8447 16.7358 16.1471 16.7358 15.7882C16.7358 15.4294 16.5088 15.2706 16.1818 15.2706H7.8182C7.4912 15.2706 7.2642 15.4294 7.2642 15.7882C7.2642 16.1471 7.4912 16.8447 7.4912 16.8447H16.5088ZM19.0218 8.78823C18.8858 8.78823 18.7498 8.81764 18.6138 8.85176L17.3438 6.63529C17.1308 6.24706 16.6278 6.08824 16.2328 6.30588L14.8628 7.09411C14.4678 7.31176 14.3088 7.81176 14.5218 8.2L15.5768 10.0118C15.3408 10.3235 15.1818 10.6941 15.1358 11.0941H12.8638C12.4228 11.0941 12.0738 11.4471 12.0738 11.8824V13.4118C12.0738 13.8471 12.4228 14.2 12.8638 14.2H19.0218C20.3378 14.2 21.4138 13.1235 21.4138 11.8C21.4138 10.4765 20.3378 8.78823 19.0218 8.78823Z"/>
+                  <path d="M4.97823 8.78823C5.11423 8.78823 5.25023 8.81764 5.38623 8.85176L6.65623 6.63529C6.86923 6.24706 7.37223 6.08824 7.76723 6.30588L9.13723 7.09411C9.53223 7.31176 9.69123 7.81176 9.47823 8.2L8.42323 10.0118C8.65923 10.3235 8.81823 10.6941 8.86423 11.0941H11.1362C11.5772 11.0941 11.9262 11.4471 11.9262 11.8824V13.4118C11.9262 13.8471 11.5772 14.2 11.1362 14.2H4.97823C3.66223 14.2 2.58623 13.1235 2.58623 11.8C2.58623 10.4765 3.66223 8.78823 4.97823 8.78823Z"/>
+                </svg>
+                Cloudflare Zero Trust
+              </a>
+              <a href="https://www.twingate.com/" target="_blank" rel="noopener noreferrer" class="tunnel-link">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Twingate
+              </a>
+              <a href="https://tailscale.com/" target="_blank" rel="noopener noreferrer" class="tunnel-link">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+                Tailscale
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Requirements callout -->
       <div class="requirements-box reveal">
         <div class="requirements-header">
@@ -2450,19 +2815,19 @@
 <span class="keyword">cd</span> /opt/griphook && <span class="keyword">sudo</span> docker compose up -d
           </div>
           <div class="code-content" id="code-windows">
-<span class="comment"># Install prerequisites (Administrator PowerShell)</span>
-<span class="keyword">winget</span> install Microsoft.OpenJDK.21
-<span class="keyword">winget</span> install OpenJS.NodeJS
+<span class="comment"># One-liner install (run in an ELEVATED PowerShell window)</span>
+<span class="comment"># Installs Java 21, Node.js, Git, builds backend + UI,</span>
+<span class="comment"># and registers Windows services via NSSM.</span>
+<span class="keyword">irm</span> https://griphook.dev/install.ps1 | <span class="keyword">iex</span>
 
-<span class="comment"># Clone and build</span>
-<span class="keyword">git</span> clone https://github.com/nullruntime-dev/runner-agent.git
-<span class="keyword">cd</span> runner-agent
-<span class="keyword">.\gradlew.bat</span> bootJar
+<span class="comment"># Manage services after install</span>
+<span class="keyword">Start-Service</span> Griphook, GriphookUI
+<span class="keyword">Stop-Service</span>  Griphook, GriphookUI
+<span class="keyword">Get-Service</span>   Griphook, GriphookUI
 
-<span class="comment"># Run the agent</span>
-<span class="keyword">$env:AGENT_TOKEN</span>=<span class="string">"your-token"</span>
-<span class="keyword">$env:GOOGLE_AI_API_KEY</span>=<span class="string">"your-key"</span>
-<span class="keyword">java</span> -jar build\libs\runner-agent-0.1.0-SNAPSHOT.jar
+<span class="comment"># Edit configuration</span>
+<span class="keyword">notepad</span> C:\ProgramData\Griphook\.env
+<span class="keyword">Restart-Service</span> Griphook
           </div>
           <div class="code-content" id="code-health">
 <span class="comment"># Check if the agent is running</span>
@@ -3312,22 +3677,343 @@ result = response.json()
       });
     });
 
-    // Terminal typing effect enhancement
-    const terminalLines = document.querySelectorAll('.terminal-line');
+    // ============================================
+    // EPIC TERMINAL ANIMATION
+    // ============================================
+
+    const terminalScenes = [
+      {
+        title: 'griphook — install',
+        lines: [
+          { type: 'comment', text: '# One-liner install' },
+          { type: 'command', prompt: '$', text: 'curl -fsSL https://griphook.dev/install.sh | bash' },
+          { type: 'output', text: '→ Detecting system... Linux x86_64' },
+          { type: 'output', text: '→ Select installation method:' },
+          { type: 'output', text: '  [1] Docker (Recommended)' },
+          { type: 'output', text: '  [2] Native Java' },
+          { type: 'input', text: '1' },
+          { type: 'progress', text: 'Pulling griphook:latest', duration: 2000 },
+          { type: 'success', text: '✓ GRIPHOOK installed to /opt/griphook' },
+          { type: 'success', text: '✓ Dashboard: http://localhost:3000' },
+        ]
+      },
+      {
+        title: 'griphook — ai chat',
+        lines: [
+          { type: 'comment', text: '# AI-powered deployment assistant' },
+          { type: 'command', prompt: 'you:', text: 'deploy the latest build to production', isAi: true },
+          { type: 'thinking', text: 'Analyzing deployment pipeline...' },
+          { type: 'ai', text: 'I\'ll deploy the latest build. Running pipeline:' },
+          { type: 'output', text: '  → git pull origin main' },
+          { type: 'output', text: '  → docker build -t app:latest .' },
+          { type: 'output', text: '  → docker-compose up -d' },
+          { type: 'progress', text: 'Deploying', duration: 1500 },
+          { type: 'success', text: '✓ Deployed successfully!' },
+          { type: 'ai', text: 'Production is live. Health check: 200 OK' },
+        ]
+      },
+      {
+        title: 'griphook — execute',
+        lines: [
+          { type: 'comment', text: '# Remote command execution' },
+          { type: 'command', prompt: '$', text: 'griphook exec "docker ps --format table"' },
+          { type: 'output', text: 'CONTAINER ID   IMAGE          STATUS         PORTS' },
+          { type: 'output', text: 'a1b2c3d4e5f6   nginx:latest   Up 2 hours     80/tcp, 443/tcp' },
+          { type: 'output', text: 'b2c3d4e5f6a7   postgres:15    Up 2 hours     5432/tcp' },
+          { type: 'output', text: 'c3d4e5f6a7b8   redis:alpine   Up 2 hours     6379/tcp' },
+          { type: 'output', text: 'd4e5f6a7b8c9   griphook       Up 2 hours     8090/tcp' },
+          { type: 'success', text: '✓ 4 containers running' },
+        ]
+      },
+      {
+        title: 'griphook — skills',
+        lines: [
+          { type: 'comment', text: '# Extensible skill system' },
+          { type: 'command', prompt: '$', text: 'griphook skills list' },
+          { type: 'output', text: '' },
+          { type: 'skill', icon: '💬', name: 'Slack', status: 'configured' },
+          { type: 'skill', icon: '📧', name: 'Gmail API', status: 'configured' },
+          { type: 'skill', icon: '⏰', name: 'Scheduler', status: 'active (3 tasks)' },
+          { type: 'skill', icon: '🔧', name: 'Custom Skills', status: '2 skills' },
+          { type: 'skill', icon: '💕', name: 'Flirt Assistant', status: 'ready to rizz' },
+          { type: 'output', text: '' },
+          { type: 'success', text: '✓ 5 skills loaded' },
+        ]
+      },
+      {
+        title: 'griphook — flirt mode 💕',
+        lines: [
+          { type: 'comment', text: '# Your AI wingman that remembers everything' },
+          { type: 'command', prompt: 'you:', text: 'she said "I love hiking, what about you?"', isAi: true },
+          { type: 'thinking', text: 'Analyzing... checking Sarah\'s profile...' },
+          { type: 'ai', text: 'Perfect opener! Here are your options:' },
+          { type: 'heart', text: '' },
+          { type: 'option', num: '1', text: '"Same! There\'s this trail I\'ve been wanting to try..."' },
+          { type: 'option', num: '2', text: '"Hiking is great, but I\'m more into getting lost with good company"' },
+          { type: 'option', num: '3', text: '"Only if you promise to save me when I trip over nothing"' },
+          { type: 'heart', text: '' },
+          { type: 'muted', text: '💡 Tip: Option 3 shows humor & vulnerability' },
+        ]
+      }
+    ];
+
+    class TerminalAnimator {
+      constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.sceneEl = document.getElementById('terminalScene');
+        this.titleEl = document.getElementById('terminalTitle');
+        this.indicatorsEl = document.getElementById('sceneIndicators');
+        this.currentScene = 0;
+        this.isTyping = false;
+        this.isPaused = false;
+        this.typeSpeed = 30;
+        this.lineDelay = 400;
+        this.sceneDelay = 4000;
+
+        this.init();
+      }
+
+      init() {
+        this.createIndicators();
+        this.playScene(0);
+
+        // Auto-advance scenes
+        setInterval(() => {
+          if (!this.isPaused && !this.isTyping) {
+            this.nextScene();
+          }
+        }, 8000);
+      }
+
+      createIndicators() {
+        terminalScenes.forEach((_, i) => {
+          const dot = document.createElement('div');
+          dot.className = 'scene-dot' + (i === 0 ? ' active' : '');
+          dot.onclick = () => this.goToScene(i);
+          this.indicatorsEl.appendChild(dot);
+        });
+      }
+
+      updateIndicators() {
+        const dots = this.indicatorsEl.querySelectorAll('.scene-dot');
+        dots.forEach((dot, i) => {
+          dot.classList.toggle('active', i === this.currentScene);
+        });
+      }
+
+      async playScene(index) {
+        this.isTyping = true;
+        this.currentScene = index;
+        this.updateIndicators();
+
+        const scene = terminalScenes[index];
+        this.titleEl.textContent = scene.title;
+
+        // Clear and fade
+        this.sceneEl.classList.add('fade-out');
+        await this.wait(300);
+        this.sceneEl.innerHTML = '';
+        this.sceneEl.classList.remove('fade-out');
+
+        // Type each line
+        for (const line of scene.lines) {
+          if (this.isPaused) break;
+          await this.typeLine(line);
+          await this.wait(this.lineDelay);
+        }
+
+        // Add cursor at end
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        this.sceneEl.appendChild(cursor);
+
+        this.isTyping = false;
+      }
+
+      async typeLine(line) {
+        const lineEl = document.createElement('div');
+        lineEl.className = 'terminal-line';
+        this.sceneEl.appendChild(lineEl);
+
+        switch (line.type) {
+          case 'comment':
+            await this.typeText(lineEl, line.text, 'terminal-muted');
+            break;
+
+          case 'command':
+            const prompt = document.createElement('span');
+            prompt.className = line.isAi ? 'terminal-ai' : 'terminal-prompt';
+            prompt.textContent = line.prompt + ' ';
+            lineEl.appendChild(prompt);
+            await this.typeText(lineEl, line.text, 'terminal-cmd');
+            break;
+
+          case 'output':
+            await this.typeText(lineEl, line.text, 'terminal-output', 10);
+            break;
+
+          case 'input':
+            const inputPrompt = document.createElement('span');
+            inputPrompt.className = 'terminal-prompt';
+            inputPrompt.textContent = '> ';
+            lineEl.appendChild(inputPrompt);
+            await this.typeText(lineEl, line.text, 'terminal-string');
+            break;
+
+          case 'success':
+            await this.typeText(lineEl, line.text, 'terminal-success', 15);
+            break;
+
+          case 'error':
+            await this.typeText(lineEl, line.text, 'terminal-error', 15);
+            break;
+
+          case 'ai':
+            const aiIcon = document.createElement('span');
+            aiIcon.className = 'terminal-ai';
+            aiIcon.textContent = '🤖 ';
+            lineEl.appendChild(aiIcon);
+            await this.typeText(lineEl, line.text, 'terminal-output');
+            break;
+
+          case 'thinking':
+            const spinner = document.createElement('span');
+            spinner.className = 'spinner';
+            lineEl.appendChild(spinner);
+            const thinkText = document.createElement('span');
+            thinkText.className = 'terminal-muted';
+            thinkText.textContent = line.text;
+            lineEl.appendChild(thinkText);
+            await this.wait(1200);
+            spinner.remove();
+            const checkmark = document.createElement('span');
+            checkmark.className = 'terminal-success';
+            checkmark.textContent = '✓ ';
+            lineEl.insertBefore(checkmark, thinkText);
+            break;
+
+          case 'progress':
+            const progText = document.createElement('span');
+            progText.className = 'terminal-muted';
+            progText.textContent = line.text + ' ';
+            lineEl.appendChild(progText);
+
+            const progBar = document.createElement('span');
+            progBar.className = 'progress-bar';
+            const progFill = document.createElement('span');
+            progFill.className = 'progress-fill';
+            progBar.appendChild(progFill);
+            lineEl.appendChild(progBar);
+
+            const progPercent = document.createElement('span');
+            progPercent.className = 'terminal-muted';
+            progPercent.textContent = ' 0%';
+            lineEl.appendChild(progPercent);
+
+            await this.animateProgress(progFill, progPercent, line.duration || 2000);
+            break;
+
+          case 'skill':
+            const skillIcon = document.createElement('span');
+            skillIcon.textContent = line.icon + ' ';
+            lineEl.appendChild(skillIcon);
+
+            const skillName = document.createElement('span');
+            skillName.className = 'terminal-cmd';
+            skillName.textContent = line.name.padEnd(15);
+            lineEl.appendChild(skillName);
+
+            const skillStatus = document.createElement('span');
+            skillStatus.className = line.status.includes('configured') || line.status.includes('active') || line.status.includes('ready') ? 'terminal-success' : 'terminal-muted';
+            skillStatus.textContent = line.status;
+            lineEl.appendChild(skillStatus);
+            break;
+
+          case 'option':
+            const optNum = document.createElement('span');
+            optNum.className = 'terminal-cyan';
+            optNum.style.color = 'var(--cyan)';
+            optNum.textContent = `  [${line.num}] `;
+            lineEl.appendChild(optNum);
+            await this.typeText(lineEl, line.text, 'terminal-string', 20);
+            break;
+
+          case 'heart':
+            lineEl.innerHTML = '<span class="terminal-heart">♥ ♥ ♥</span>';
+            break;
+
+          case 'muted':
+            await this.typeText(lineEl, line.text, 'terminal-muted', 15);
+            break;
+        }
+      }
+
+      async typeText(container, text, className, speed = this.typeSpeed) {
+        const span = document.createElement('span');
+        span.className = className;
+        container.appendChild(span);
+
+        for (const char of text) {
+          span.textContent += char;
+          if (char !== ' ') {
+            await this.wait(speed + Math.random() * 20);
+          }
+        }
+      }
+
+      async animateProgress(fillEl, percentEl, duration) {
+        const steps = 20;
+        const stepDuration = duration / steps;
+
+        for (let i = 0; i <= steps; i++) {
+          const percent = Math.round((i / steps) * 100);
+          fillEl.style.width = `${percent}%`;
+          percentEl.textContent = ` ${percent}%`;
+          await this.wait(stepDuration);
+        }
+      }
+
+      wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      nextScene() {
+        const next = (this.currentScene + 1) % terminalScenes.length;
+        this.playScene(next);
+      }
+
+      goToScene(index) {
+        if (index !== this.currentScene) {
+          this.playScene(index);
+        }
+      }
+
+      pause() { this.isPaused = true; }
+      resume() { this.isPaused = false; }
+    }
+
+    // Initialize terminal animation when visible
+    const heroTerminal = document.getElementById('heroTerminal');
+    let terminalAnimator = null;
 
     const observeTerminal = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          terminalLines.forEach((line, i) => {
-            line.style.animationPlayState = 'running';
-          });
+        if (entry.isIntersecting && !terminalAnimator) {
+          terminalAnimator = new TerminalAnimator('heroTerminal');
         }
       });
-    }, { threshold: 0.5 });
+    }, { threshold: 0.3 });
 
-    const terminal = document.querySelector('.terminal');
-    if (terminal) {
-      observeTerminal.observe(terminal);
+    if (heroTerminal) {
+      observeTerminal.observe(heroTerminal);
+
+      // Pause on hover
+      heroTerminal.addEventListener('mouseenter', () => {
+        if (terminalAnimator) terminalAnimator.pause();
+      });
+      heroTerminal.addEventListener('mouseleave', () => {
+        if (terminalAnimator) terminalAnimator.resume();
+      });
     }
   </script>
 </body>

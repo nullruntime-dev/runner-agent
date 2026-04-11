@@ -39,6 +39,10 @@ public class SkillConfig {
     @Column(nullable = false)
     private boolean enabled;
 
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private boolean hidden = false;
+
     @Column(columnDefinition = "TEXT")
     private String configJson;
 

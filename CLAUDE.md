@@ -5,15 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 
 ```bash
-# Backend (Java 21 / Spring Boot 3.4)
+# Backend (Java 21 / Spring Boot 3.4.3)
 ./gradlew bootRun                              # Run backend (requires GOOGLE_AI_API_KEY env var)
 ./gradlew build                                # Build + run tests
 ./gradlew test                                 # Run tests only
 ./gradlew test --tests "ClassName"             # Run single test class
 ./gradlew test --tests "ClassName.methodName"  # Run single test method
 ./gradlew bootJar                              # Build executable JAR
+./gradlew bootBuildImage                       # Build Docker image (requires Docker)
 
-# Frontend (Next.js 16 / React 19)
+# Frontend (Next.js 16.1 / React 19)
 cd ui && npm install                 # Install dependencies (first time)
 cd ui && npm run dev                 # Run frontend at http://localhost:3000
 cd ui && npm run build               # Production build
@@ -34,8 +35,8 @@ cd ui && npm run lint                # Run ESLint
 │                                                                         │
 │  Slack Socket ───► SlackSocketModeService (WebSocket, no public URL)    │
 │                                                                         │
-│  Skills API ─────► SkillService (slack, gmail, smtp, gmail-api, flirt)  │
-│                    └── Configs stored as JSON in skill_configs table    │
+│  Skills API ─────► SkillService (slack, gmail, smtp, gmail-api, flirt,  │
+│                    web-search) └── Configs in skill_configs table       │
 │                                                                         │
 │  SSE Streaming ──► SseStreamManager (log streaming to UI)               │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -94,6 +95,7 @@ H2 embedded at `./agent-data.mv.db`. Tables:
 - `skill_configs` — skill configurations (JSON blob)
 - `crush_profiles` — flirt assistant profiles
 - `gmail_tokens` — Gmail OAuth tokens
+- `chat_sessions` / `chat_messages` — chat history persistence
 
 Access console: `http://localhost:8090/h2-console` (JDBC URL: `jdbc:h2:file:./agent-data`, user: `sa`, no password)
 
@@ -103,19 +105,24 @@ Access console: `http://localhost:8090/h2-console` (JDBC URL: `jdbc:h2:file:./ag
 |----------|----------|---------|-------------|
 | `GOOGLE_AI_API_KEY` | Yes (for AI) | — | Google AI API key for Gemini |
 | `AGENT_TOKEN` | No | `1234` | API auth token |
-| `AGENT_ADK_MODEL` | No | `gemini-flash-lite-latest` | Gemini model ID |
+| `AGENT_ADK_MODEL` | No | `gemini-2.0-flash` | Gemini model ID |
 | `AGENT_ADK_ENABLED` | No | `true` | Enable/disable AI chat |
 | `AGENT_WORKING_DIR` | No | `/tmp` | Working directory for command execution |
 | `AGENT_DEFAULT_SHELL` | No | `/bin/sh` | Default shell for commands |
 | `AGENT_MAX_CONCURRENT` | No | `5` | Max concurrent executions |
 | `SERVER_PORT` | No | `8090` | Backend server port |
+| `H2_CONSOLE_ENABLED` | No | `true` | Enable H2 web console (disable in production) |
 
 See `.env.example` for skill-specific variables (Slack, Gmail, SMTP, etc.).
 
 ## Project Layout
 
 - `src/main/java/dev/runner/agent/adk/` — AI agent: `AgentService`, `AdkConfig`, tools
-- `src/main/java/dev/runner/agent/adk/tools/` — ADK tool implementations (Slack, Gmail, SMTP, Flirt, etc.)
+- `src/main/java/dev/runner/agent/adk/tools/` — ADK tool implementations:
+  - Execution tools: `ExecuteCommandsTool`, `GetExecutionStatusTool`, `ListExecutionsTool`, `ReadLogsTool`, `CancelExecutionTool`
+  - Communication: `SlackTool`, `GmailTool`, `GmailApiTool`, `SmtpTool`
+  - Search: `WebSearchTool` (Google Custom Search API)
+  - Other: `ScheduleTool`, `CustomSkillTool`, `FlirtTool`
 - `src/main/java/dev/runner/agent/api/` — REST controllers
 - `src/main/java/dev/runner/agent/executor/` — Command execution: `ExecutorService`, `StepRunner`
 - `src/main/java/dev/runner/agent/service/` — Business services:
@@ -123,5 +130,6 @@ See `.env.example` for skill-specific variables (Slack, Gmail, SMTP, etc.).
   - `CustomSkillService` — user-defined custom skills
   - `GmailApiService` — Gmail OAuth token handling
   - `CrushProfileService` — profile persistence for FlirtTool
+  - `ChatService` — chat session and message persistence
 - `src/main/java/dev/runner/agent/slack/` — Slack Socket Mode integration
-- `ui/` — Next.js 16 frontend with React 19, Tailwind 4, TypeScript
+- `ui/` — Next.js 16 frontend with React 19, Tailwind 4, TypeScript, Prisma (LibSQL adapter)

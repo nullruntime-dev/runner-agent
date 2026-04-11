@@ -17,8 +17,11 @@
 
 import com.google.adk.events.Event;
 import dev.runner.agent.adk.AgentService;
+import dev.runner.agent.domain.ChatSession;
 import dev.runner.agent.dto.ChatRequest;
 import dev.runner.agent.dto.ChatResponse;
+import dev.runner.agent.dto.ChatSessionDto;
+import dev.runner.agent.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -29,6 +32,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -41,6 +46,7 @@ import java.util.concurrent.Executors;
 public class AgentController {
 
     private final AgentService agentService;
+    private final ChatService chatService;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
 
     @PostMapping("/chat")
@@ -89,6 +95,33 @@ public class AgentController {
         log.info("DELETE /agent/session/{}", sessionId);
         agentService.clearSession(sessionId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/sessions")
+    public ResponseEntity<List<ChatSessionDto>> listSessions(
+            @RequestParam(defaultValue = "50") int limit
+    ) {
+        log.info("GET /agent/sessions limit={}", limit);
+        List<ChatSession> sessions = chatService.listSessions(limit);
+        List<ChatSessionDto> dtos = sessions.stream()
+                .map(session -> ChatSessionDto.fromWithMessageCount(session, chatService.getMessageCount(session.getId())))
+                .toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/sessions/{sessionId}")
+    public ResponseEntity<ChatSessionDto> getSession(@PathVariable String sessionId) {
+        log.info("GET /agent/sessions/{}", sessionId);
+        return chatService.getSessionWithMessages(sessionId)
+                .map(session -> ResponseEntity.ok(ChatSessionDto.fromWithMessages(session)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<Map<String, Object>> archiveSession(@PathVariable String sessionId) {
+        log.info("DELETE /agent/sessions/{}", sessionId);
+        chatService.archiveSession(sessionId);
+        return ResponseEntity.ok(Map.of("success", true, "sessionId", sessionId));
     }
 
     private void sendEvent(SseEmitter emitter, Event event, String sessionId) throws IOException {

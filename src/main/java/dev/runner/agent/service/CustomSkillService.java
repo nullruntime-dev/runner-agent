@@ -134,6 +134,24 @@ public class CustomSkillService {
     }
 
     @Transactional
+    public void toggleVisibility(String name, boolean hidden) {
+        log.info("Toggling custom skill visibility name={} hidden={}", name, hidden);
+
+        CustomSkill skill = customSkillRepository.findByName(name)
+                .orElseThrow(() -> new IllegalArgumentException("Skill not found: " + name));
+
+        skill.setHidden(hidden);
+        customSkillRepository.save(skill);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomSkill> listVisibleSkills() {
+        return customSkillRepository.findAll().stream()
+                .filter(s -> !s.isHidden())
+                .toList();
+    }
+
+    @Transactional
     public Map<String, Object> runSkill(String name, String input, Map<String, Object> params) {
         log.info("Running custom skill name={}", name);
 

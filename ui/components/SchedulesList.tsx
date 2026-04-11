@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import {
   ScheduledTask,
   getScheduledTasks,
@@ -9,6 +8,8 @@ import {
   runScheduledTaskNow,
   deleteScheduledTask,
 } from '@/lib/api';
+import AddScheduleModal from './AddScheduleModal';
+import ScheduleDetailModal from './ScheduleDetailModal';
 
 interface SchedulesListProps {
   agentId: string;
@@ -17,27 +18,42 @@ interface SchedulesListProps {
 
 export default function SchedulesList({ agentId, isOnline }: SchedulesListProps) {
   const [schedules, setSchedules] = useState<ScheduledTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isOnline);
   const [running, setRunning] = useState<number | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<ScheduledTask | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchSchedules = async () => {
+  useEffect(() => {
+    // Skip fetch if offline
     if (!isOnline) {
-      setLoading(false);
       return;
     }
 
-    try {
-      const tasks = await getScheduledTasks(agentId);
-      setSchedules(tasks);
-    } catch (err) {
-      console.error('Failed to fetch schedules:', err);
-    }
-    setLoading(false);
-  };
+    let cancelled = false;
 
-  useEffect(() => {
-    fetchSchedules();
-  }, [agentId, isOnline]);
+    (async () => {
+      try {
+        const tasks = await getScheduledTasks(agentId);
+        if (!cancelled) {
+          setSchedules(tasks);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, isOnline, refreshKey]);
+
+  const refreshSchedules = () => {
+    setRefreshKey(k => k + 1);
+  };
 
   const handleToggle = async (task: ScheduledTask) => {
     try {
@@ -45,8 +61,8 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
       setSchedules(prev =>
         prev.map(t => (t.id === task.id ? { ...t, enabled: !t.enabled } : t))
       );
-    } catch (err) {
-      console.error('Failed to toggle schedule:', err);
+    } catch {
+      // Ignore errors
     }
   };
 
@@ -56,9 +72,9 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
     try {
       await runScheduledTaskNow(agentId, task.id);
       // Refresh to get updated lastRun info
-      fetchSchedules();
-    } catch (err) {
-      console.error('Failed to run schedule:', err);
+      refreshSchedules();
+    } catch {
+      // Ignore errors
     }
     setRunning(null);
   };
@@ -125,24 +141,34 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
 
   if (schedules.length === 0) {
     return (
-      <Link
-        href={`/agents/${agentId}/chat`}
-        className="block px-3 py-3 hover:bg-[#111] transition-colors group cursor-pointer"
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 bg-[#00fff2]/10 text-[#00fff2] flex items-center justify-center border border-[#00fff2]/30 group-hover:bg-[#00fff2]/20 transition-colors">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      <>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="w-full px-3 py-3 hover:bg-[#111] transition-colors group cursor-pointer text-left"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-6 h-6 bg-[#00fff2]/10 text-[#00fff2] flex items-center justify-center border border-[#00fff2]/30 group-hover:bg-[#00fff2]/20 transition-colors">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-[10px] font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors">
+              Add Schedule
+            </span>
           </div>
-          <span className="text-[10px] font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors">
-            Add Schedule
-          </span>
-        </div>
-        <p className="text-[10px] text-neutral-600 leading-relaxed group-hover:text-neutral-500 transition-colors">
-          Say: &quot;Schedule daily email summary at 9am&quot;
-        </p>
-      </Link>
+          <p className="text-[10px] text-neutral-600 leading-relaxed group-hover:text-neutral-500 transition-colors">
+            Run tasks automatically on a schedule
+          </p>
+        </button>
+
+        {showAddModal && (
+          <AddScheduleModal
+            agentId={agentId}
+            onClose={() => setShowAddModal(false)}
+            onCreated={refreshSchedules}
+          />
+        )}
+      </>
     );
   }
 
@@ -161,30 +187,36 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
             }`}
           >
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 ${colors.bg} ${colors.text} flex items-center justify-center border ${colors.border} flex-shrink-0`}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
+              {/* Clickable area to open details */}
+              <button
+                onClick={() => setSelectedTask(task)}
+                className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+              >
+                <div className={`w-8 h-8 ${colors.bg} ${colors.text} flex items-center justify-center border ${colors.border} flex-shrink-0`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-neutral-200 truncate">
-                    {task.name}
-                  </span>
-                  {task.enabled && (
-                    <span className="w-1.5 h-1.5 bg-[#00ff66] shadow-[0_0_6px_rgba(0,255,102,0.5)]" />
-                  )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-neutral-200 truncate">
+                      {task.name}
+                    </span>
+                    {task.enabled && (
+                      <span className="w-1.5 h-1.5 bg-[#00ff66] shadow-[0_0_6px_rgba(0,255,102,0.5)]" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-neutral-600">
+                      {formatSchedule(task)}
+                    </span>
+                    <span className="text-[10px] text-neutral-500">
+                      Next: {formatNextRun(task.nextRunAt)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] text-neutral-600">
-                    {formatSchedule(task)}
-                  </span>
-                  <span className="text-[10px] text-neutral-500">
-                    Next: {formatNextRun(task.nextRunAt)}
-                  </span>
-                </div>
-              </div>
+              </button>
 
               <div className="flex items-center gap-1 flex-shrink-0">
                 {/* Run Now */}
@@ -255,10 +287,10 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
         );
       })}
 
-      {/* Add Schedule link */}
-      <Link
-        href={`/agents/${agentId}/chat`}
-        className="flex items-center gap-2 px-2 py-2 hover:bg-[#111] transition-colors group"
+      {/* Add Schedule button */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="w-full flex items-center gap-2 px-2 py-2 hover:bg-[#111] transition-colors group text-left"
       >
         <div className="w-6 h-6 bg-[#00fff2]/10 text-[#00fff2] flex items-center justify-center group-hover:bg-[#00fff2]/20 transition-colors">
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -266,9 +298,47 @@ export default function SchedulesList({ agentId, isOnline }: SchedulesListProps)
           </svg>
         </div>
         <span className="text-[10px] text-neutral-500 group-hover:text-neutral-400 transition-colors">
-          Add Schedule via Chat
+          Add Schedule
         </span>
-      </Link>
+      </button>
+
+      {showAddModal && (
+        <AddScheduleModal
+          agentId={agentId}
+          onClose={() => setShowAddModal(false)}
+          onCreated={refreshSchedules}
+        />
+      )}
+
+      {selectedTask && (
+        <ScheduleDetailModal
+          task={selectedTask}
+          agentId={agentId}
+          onClose={() => setSelectedTask(null)}
+          onRunNow={async () => {
+            setRunning(selectedTask.id);
+            try {
+              await runScheduledTaskNow(agentId, selectedTask.id);
+              refreshSchedules();
+              // Update the selected task with new data
+              const tasks = await getScheduledTasks(agentId);
+              const updated = tasks.find(t => t.id === selectedTask.id);
+              if (updated) setSelectedTask(updated);
+            } catch {
+              // Ignore errors
+            }
+            setRunning(null);
+          }}
+          onUpdated={async () => {
+            refreshSchedules();
+            const tasks = await getScheduledTasks(agentId);
+            const updated = tasks.find(t => t.id === selectedTask.id);
+            if (updated) setSelectedTask(updated);
+          }}
+          onDeleted={refreshSchedules}
+          running={running === selectedTask.id}
+        />
+      )}
     </div>
   );
 }
