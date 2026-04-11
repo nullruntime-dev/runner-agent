@@ -20,30 +20,28 @@
 param(
     [ValidateSet('source')]
     [string]$Method = 'source',
-    [string]$InstallDir = "$env:ProgramData\Griphook",
+    [string]$InstallDir = "${env:ProgramData}\Griphook",
     [switch]$SkipServices
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-# ── Configuration ──────────────────────────────────────────────────────────
+# -- Configuration ----------------------------------------------------------
 $GithubRepo        = 'nullruntime-dev/runner-agent'
 $RequiredJavaVer   = 21
 $RequiredNodeVer   = 22
-$NssmVersion       = '2.24'
-$NssmUrl           = "https://nssm.cc/release/nssm-$NssmVersion.zip"
 $BackendServiceName = 'Griphook'
 $FrontendServiceName = 'GriphookUI'
 
-# ── Output helpers ─────────────────────────────────────────────────────────
+# -- Output helpers ---------------------------------------------------------
 function Write-Banner {
     Write-Host ''
-    Write-Host '  ╔═══════════════════════════════════════════╗' -ForegroundColor Cyan
-    Write-Host '  ║           GRIPHOOK INSTALLER              ║' -ForegroundColor Cyan
-    Write-Host '  ║       AI-Powered Deployment Agent         ║' -ForegroundColor Cyan
-    Write-Host '  ║              (Windows)                    ║' -ForegroundColor Cyan
-    Write-Host '  ╚═══════════════════════════════════════════╝' -ForegroundColor Cyan
+    Write-Host '  +-------------------------------------------+' -ForegroundColor Cyan
+    Write-Host '  |           GRIPHOOK INSTALLER              |' -ForegroundColor Cyan
+    Write-Host '  |       AI-Powered Deployment Agent         |' -ForegroundColor Cyan
+    Write-Host '  |              [Windows]                    |' -ForegroundColor Cyan
+    Write-Host '  +-------------------------------------------+' -ForegroundColor Cyan
     Write-Host ''
 }
 
@@ -52,7 +50,7 @@ function Write-Success ([string]$m) { Write-Host "[ OK ] $m" -ForegroundColor Gr
 function Write-Warn    ([string]$m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Write-Err     ([string]$m) { Write-Host "[FAIL] $m" -ForegroundColor Red }
 
-# ── Pre-flight checks ──────────────────────────────────────────────────────
+# -- Pre-flight checks ------------------------------------------------------
 function Test-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($id)
@@ -83,21 +81,25 @@ function Assert-Winget {
     Write-Success 'winget is available'
 }
 
-# ── PATH refresh (after package installs) ──────────────────────────────────
+# -- PATH refresh (after package installs) ----------------------------------
 function Update-SessionPath {
     $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $user    = [Environment]::GetEnvironmentVariable('Path', 'User')
     $env:Path = @($machine, $user) -join ';'
 }
 
-# ── Dependency installers ──────────────────────────────────────────────────
+# -- Dependency installers --------------------------------------------------
 # Resolve an executable via where.exe (bypasses PowerShell's Get-Command cache,
 # which is stale after winget updates PATH mid-session).
+# NOTE: we do NOT check $LASTEXITCODE because it leaks in from prior pipelines
+# (e.g. winget install | Out-Null). We just inspect the output directly.
 function Resolve-OnPath {
     param([string]$Name)
-    $resolved = & where.exe $Name 2>$null | Select-Object -First 1
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolved)) { return $null }
-    return $resolved.Trim()
+    $output = & where.exe $Name 2>$null
+    if (-not $output) { return $null }
+    $first = @($output)[0]
+    if ([string]::IsNullOrWhiteSpace($first)) { return $null }
+    return $first.Trim()
 }
 
 function Get-JavaMajorVersion {
@@ -106,7 +108,7 @@ function Get-JavaMajorVersion {
     try {
         # Java 9+: --version writes to stdout. Fall back to -version (stderr) for older installs.
         $out = & $java --version 2>&1 | Select-Object -First 1
-        if ($LASTEXITCODE -ne 0) {
+        if (-not $out) {
             $out = & $java -version 2>&1 | Select-Object -First 1
         }
         if ($out -match '(\d+)') { return [int]$matches[1] }
@@ -130,7 +132,7 @@ function Install-Java {
 
     $current = Get-JavaMajorVersion
     if ($current -lt $RequiredJavaVer) {
-        throw "Java install appeared to succeed but 'java --version' still reports $current. Open a new terminal and re-run."
+        throw "Java install appeared to succeed but 'java --version' still reports ${current}. Open a new terminal and re-run."
     }
     Write-Success "Java $current installed"
 }
@@ -161,7 +163,7 @@ function Install-Node {
 
     $current = Get-NodeMajorVersion
     if ($current -lt $RequiredNodeVer) {
-        throw "Node.js install appeared to succeed but 'node -v' still reports $current. Open a new terminal and re-run."
+        throw "Node.js install appeared to succeed but 'node -v' still reports ${current}. Open a new terminal and re-run."
     }
     Write-Success "Node.js $current installed"
 }
@@ -184,7 +186,7 @@ function Install-Git {
     Write-Success 'Git installed'
 }
 
-# ── Clone + build ──────────────────────────────────────────────────────────
+# -- Clone + build ----------------------------------------------------------
 function Get-Sources {
     param([string]$Destination)
 
@@ -195,8 +197,20 @@ function Get-Sources {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
     Write-Info "Cloning $GithubRepo..."
-    git clone --depth 1 "https://github.com/$GithubRepo.git" $Destination 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "git clone failed (exit $LASTEXITCODE)" }
+    $repoUrl = "https://github.com/" + $GithubRepo + ".git"
+    # Save + restore EAP so git's stderr progress output doesn't become a terminating error.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & git clone --quiet --depth 1 $repoUrl $Destination *>$null
+        $cloneExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($cloneExit -ne 0) { throw "git clone failed (exit $cloneExit)" }
+    if (-not (Test-Path (Join-Path $Destination '.git'))) {
+        throw "git clone reported success but $Destination\.git does not exist"
+    }
     Write-Success 'Source checkout complete'
 }
 
@@ -205,10 +219,14 @@ function Build-Backend {
 
     Write-Info 'Building backend with Gradle (this takes a few minutes)...'
     Push-Location $SrcDir
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
-        & cmd.exe /c 'gradlew.bat bootJar --no-daemon' 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-        if ($LASTEXITCODE -ne 0) { throw "Gradle build failed (exit $LASTEXITCODE)" }
+        & cmd.exe /c 'gradlew.bat bootJar --no-daemon 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        $gradleExit = $LASTEXITCODE
+        if ($gradleExit -ne 0) { throw "Gradle build failed (exit $gradleExit)" }
     } finally {
+        $ErrorActionPreference = $prevEap
         Pop-Location
     }
 
@@ -235,32 +253,34 @@ function Build-Frontend {
     Copy-Item -Recurse -Force $uiSrc $uiDest
 
     Push-Location $uiDest
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         Write-Info 'Installing npm dependencies...'
-        & cmd.exe /c 'npm install --loglevel=error' 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE)" }
+        & cmd.exe /c 'npm install --loglevel=error 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        $npmExit = $LASTEXITCODE
+        if ($npmExit -ne 0) { throw "npm install failed (exit $npmExit)" }
 
         # Write UI env before build (Prisma needs DATABASE_URL)
-        $uiEnv = @"
-DATABASE_URL="file:./agents.db"
-"@
-        Set-Content -Path (Join-Path $uiDest '.env.local') -Value $uiEnv -Encoding ASCII
+        Set-Content -Path (Join-Path $uiDest '.env.local') -Value 'DATABASE_URL="file:./agents.db"' -Encoding ASCII
 
         Write-Info 'Generating Prisma client...'
-        & cmd.exe /c 'npx --yes prisma generate' 2>&1 | Out-Null
-        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss' 2>&1 | Out-Null
+        & cmd.exe /c 'npx --yes prisma generate 2>&1' | Out-Null
+        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss 2>&1' | Out-Null
 
         Write-Info 'Building Next.js production bundle...'
-        & cmd.exe /c 'npm run build' 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-        if ($LASTEXITCODE -ne 0) { throw "Next.js build failed (exit $LASTEXITCODE)" }
+        & cmd.exe /c 'npm run build 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        $buildExit = $LASTEXITCODE
+        if ($buildExit -ne 0) { throw "Next.js build failed (exit $buildExit)" }
     } finally {
+        $ErrorActionPreference = $prevEap
         Pop-Location
     }
 
     Write-Success 'Frontend built'
 }
 
-# ── Configuration ──────────────────────────────────────────────────────────
+# -- Configuration ----------------------------------------------------------
 function New-AgentToken {
     $bytes = New-Object byte[] 32
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -272,14 +292,14 @@ function Write-EnvFile {
 
     $envPath = Join-Path $InstallDir '.env'
     if (Test-Path $envPath) {
-        Write-Info ".env already exists at $envPath — leaving it untouched"
+        Write-Info ".env already exists at $envPath - leaving it untouched"
         return
     }
 
     Write-Host ''
-    Write-Host '════════════════════════════════════════════' -ForegroundColor Cyan
+    Write-Host '============================================' -ForegroundColor Cyan
     Write-Host '         Quick Configuration                ' -ForegroundColor Cyan
-    Write-Host '════════════════════════════════════════════' -ForegroundColor Cyan
+    Write-Host '============================================' -ForegroundColor Cyan
     Write-Host ''
     Write-Host '1. Google AI API Key ' -NoNewline
     Write-Host '(required for AI chat)' -ForegroundColor Red
@@ -299,49 +319,36 @@ function Write-EnvFile {
     $port = Read-Host '3. Server Port [8090]'
     if ([string]::IsNullOrWhiteSpace($port)) { $port = '8090' }
 
-    $content = @"
-# GRIPHOOK Configuration (generated $(Get-Date -Format 'yyyy-MM-dd HH:mm'))
-AGENT_TOKEN=$token
-GOOGLE_AI_API_KEY=$apiKey
-
-SERVER_PORT=$port
-AGENT_WORKING_DIR=$env:TEMP
-AGENT_DEFAULT_SHELL=cmd.exe
-AGENT_MAX_CONCURRENT=5
-
-AGENT_ADK_MODEL=gemini-2.0-flash
-AGENT_ADK_ENABLED=true
-"@
-    Set-Content -Path $envPath -Value $content -Encoding ASCII
-    Write-Success "Configuration saved: $envPath"
+    $generatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm'
+    $tempDir = $env:TEMP
+    $lines = @(
+        "# GRIPHOOK Configuration (generated ${generatedAt})",
+        "AGENT_TOKEN=${token}",
+        "GOOGLE_AI_API_KEY=${apiKey}",
+        "",
+        "SERVER_PORT=${port}",
+        "AGENT_WORKING_DIR=${tempDir}",
+        "AGENT_DEFAULT_SHELL=cmd.exe",
+        "AGENT_MAX_CONCURRENT=5",
+        "",
+        "AGENT_ADK_MODEL=gemini-2.0-flash",
+        "AGENT_ADK_ENABLED=true"
+    )
+    Set-Content -Path $envPath -Value $lines -Encoding ASCII
+    Write-Success "Configuration saved: ${envPath}"
 }
 
-# ── Service wrappers (NSSM) ────────────────────────────────────────────────
+# -- Service wrappers (NSSM) ------------------------------------------------
+# nssm.exe is committed at the repo root and copied in from the cloned source.
 function Install-Nssm {
-    param([string]$InstallDir)
+    param([string]$SrcDir, [string]$InstallDir)
 
     $nssmExe = Join-Path $InstallDir 'nssm.exe'
-    if (Test-Path $nssmExe) {
-        Write-Success 'NSSM already present'
-        return $nssmExe
+    $nssmSrc = Join-Path $SrcDir 'nssm.exe'
+    if (-not (Test-Path $nssmSrc)) {
+        throw "nssm.exe not found in cloned repo at $nssmSrc"
     }
-
-    Write-Info "Downloading NSSM $NssmVersion..."
-    $tmpZip = Join-Path $env:TEMP "nssm-$NssmVersion.zip"
-    Invoke-WebRequest -Uri $NssmUrl -OutFile $tmpZip -UseBasicParsing
-
-    $tmpDir = Join-Path $env:TEMP "nssm-$NssmVersion-extract"
-    if (Test-Path $tmpDir) { Remove-Item -Recurse -Force $tmpDir }
-    Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
-
-    $arch = if ([Environment]::Is64BitOperatingSystem) { 'win64' } else { 'win32' }
-    $src = Join-Path $tmpDir "nssm-$NssmVersion\$arch\nssm.exe"
-    if (-not (Test-Path $src)) { throw "NSSM binary not found inside archive at $src" }
-    Copy-Item -Force $src $nssmExe
-
-    Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
-
+    Copy-Item -Force $nssmSrc $nssmExe
     Write-Success "NSSM installed: $nssmExe"
     return $nssmExe
 }
@@ -406,7 +413,7 @@ function New-FrontendService {
     # so NSSM tracks the real process instead of an intermediate shell.
     $nextBin = Join-Path $uiDir 'node_modules\next\dist\bin\next'
     if (-not (Test-Path $nextBin)) {
-        throw "Next.js binary not found at $nextBin — did 'npm install' succeed?"
+        throw "Next.js binary not found at $nextBin - did 'npm install' succeed?"
     }
 
     Remove-ExistingService -Nssm $Nssm -Name $FrontendServiceName
@@ -434,14 +441,14 @@ function Start-Services {
     Write-Success 'Services started'
 }
 
-# ── Summary ────────────────────────────────────────────────────────────────
+# -- Summary ----------------------------------------------------------------
 function Write-NextSteps {
     param([string]$InstallDir)
 
     Write-Host ''
-    Write-Host '════════════════════════════════════════════' -ForegroundColor Green
+    Write-Host '============================================' -ForegroundColor Green
     Write-Host '         Installation Complete!             ' -ForegroundColor Green
-    Write-Host '════════════════════════════════════════════' -ForegroundColor Green
+    Write-Host '============================================' -ForegroundColor Green
     Write-Host ''
     Write-Host '  Dashboard:' -NoNewline -ForegroundColor Cyan
     Write-Host '  http://localhost:3000'
@@ -470,7 +477,7 @@ function Write-NextSteps {
     Write-Host ''
 }
 
-# ── Main ───────────────────────────────────────────────────────────────────
+# -- Main -------------------------------------------------------------------
 function Main {
     Write-Banner
     Assert-Admin
@@ -492,7 +499,7 @@ function Main {
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'
     } else {
-        $nssm = Install-Nssm -InstallDir $InstallDir
+        $nssm = Install-Nssm -SrcDir $srcDir -InstallDir $InstallDir
         New-BackendService  -Nssm $nssm -InstallDir $InstallDir
         New-FrontendService -Nssm $nssm -InstallDir $InstallDir
         Start-Services
