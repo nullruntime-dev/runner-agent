@@ -91,11 +91,25 @@ function Update-SessionPath {
 }
 
 # ── Dependency installers ──────────────────────────────────────────────────
+# Resolve an executable via where.exe (bypasses PowerShell's Get-Command cache,
+# which is stale after winget updates PATH mid-session).
+function Resolve-OnPath {
+    param([string]$Name)
+    $resolved = & where.exe $Name 2>$null | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolved)) { return $null }
+    return $resolved.Trim()
+}
+
 function Get-JavaMajorVersion {
-    if (-not (Get-Command java -ErrorAction SilentlyContinue)) { return 0 }
+    $java = Resolve-OnPath 'java'
+    if (-not $java) { return 0 }
     try {
-        $out = & java -version 2>&1 | Select-Object -First 1
-        if ($out -match '"(\d+)') { return [int]$matches[1] }
+        # Java 9+: --version writes to stdout. Fall back to -version (stderr) for older installs.
+        $out = & $java --version 2>&1 | Select-Object -First 1
+        if ($LASTEXITCODE -ne 0) {
+            $out = & $java -version 2>&1 | Select-Object -First 1
+        }
+        if ($out -match '(\d+)') { return [int]$matches[1] }
     } catch { }
     return 0
 }
@@ -116,15 +130,16 @@ function Install-Java {
 
     $current = Get-JavaMajorVersion
     if ($current -lt $RequiredJavaVer) {
-        throw "Java install appeared to succeed but 'java -version' still reports $current. Open a new terminal and re-run."
+        throw "Java install appeared to succeed but 'java --version' still reports $current. Open a new terminal and re-run."
     }
     Write-Success "Java $current installed"
 }
 
 function Get-NodeMajorVersion {
-    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return 0 }
+    $node = Resolve-OnPath 'node'
+    if (-not $node) { return 0 }
     try {
-        $v = (& node -v) -replace '^v', ''
+        $v = (& $node -v) -replace '^v', ''
         return [int]($v -split '\.')[0]
     } catch { }
     return 0
@@ -152,7 +167,7 @@ function Install-Node {
 }
 
 function Install-Git {
-    if (Get-Command git -ErrorAction SilentlyContinue) {
+    if (Resolve-OnPath 'git') {
         Write-Success 'Git is available'
         return
     }
@@ -163,7 +178,7 @@ function Install-Git {
 
     Update-SessionPath
 
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    if (-not (Resolve-OnPath 'git')) {
         throw "Git install appeared to succeed but 'git' is still not on PATH. Open a new terminal and re-run."
     }
     Write-Success 'Git installed'
@@ -346,7 +361,8 @@ function Remove-ExistingService {
 function New-BackendService {
     param([string]$Nssm, [string]$InstallDir)
 
-    $javaExe = (Get-Command java).Source
+    $javaExe = Resolve-OnPath 'java'
+    if (-not $javaExe) { throw "java not found on PATH when creating backend service" }
     $jar     = Join-Path $InstallDir 'griphook-agent.jar'
     $logDir  = Join-Path $InstallDir 'logs'
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -381,7 +397,8 @@ function New-FrontendService {
     param([string]$Nssm, [string]$InstallDir)
 
     $uiDir = Join-Path $InstallDir 'ui'
-    $nodeExe = (Get-Command node).Source
+    $nodeExe = Resolve-OnPath 'node'
+    if (-not $nodeExe) { throw "node not found on PATH when creating frontend service" }
     $logDir = Join-Path $InstallDir 'logs'
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
