@@ -76,7 +76,7 @@ public class FlirtTool {
 
         if (!isConfigured()) {
             result.put("success", false);
-            result.put("error", "Flirt Assistant is not configured. Please configure it in the agent settings.");
+            result.put("error", "Wingman is not configured. Please configure it in the agent settings.");
             return result;
         }
 
@@ -139,7 +139,7 @@ public class FlirtTool {
 
         if (!isConfigured()) {
             result.put("success", false);
-            result.put("error", "Flirt Assistant is not configured. Please configure it in the agent settings.");
+            result.put("error", "Wingman is not configured. Please configure it in the agent settings.");
             return result;
         }
 
@@ -197,7 +197,7 @@ public class FlirtTool {
 
         if (!isConfigured()) {
             result.put("success", false);
-            result.put("error", "Flirt Assistant is not configured. Please configure it in the agent settings.");
+            result.put("error", "Wingman is not configured. Please configure it in the agent settings.");
             return result;
         }
 
@@ -252,7 +252,7 @@ public class FlirtTool {
 
         if (!isConfigured()) {
             result.put("success", false);
-            result.put("error", "Flirt Assistant is not configured.");
+            result.put("error", "Wingman is not configured.");
             return result;
         }
 

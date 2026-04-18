@@ -16,7 +16,7 @@ interface ChatViewProps {
 
 const skillModePrompts: Record<string, { prefix: string; placeholder: string; color: string; quickActions: { label: string; message: string }[] }> = {
   flirt: {
-    prefix: '[Flirt Assistant Mode] ',
+    prefix: '[Wingman Mode] ',
     placeholder: 'e.g., "Sarah said she loves hiking - what should I reply?"',
     color: 'pink',
     quickActions: [
@@ -491,7 +491,7 @@ export default function ChatView({
               selectedSkill === 'flirt' ? 'text-[#ff00ea]' : 'text-white'
             }`}>
               {selectedSkill === 'flirt'
-                ? 'Flirt Assistant'
+                ? 'Wingman'
                 : selectedSkill
                   ? skills.find(s => s.name === selectedSkill)?.displayName
                   : 'AI Assistant'

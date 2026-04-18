@@ -87,7 +87,7 @@ export default function DocsPage() {
         />
         <FeatureCard
           title="Integrations (Skills)"
-          description="Connect to Slack, Gmail, SMTP, and even a Flirt Assistant for dating help"
+          description="Connect to Slack, Gmail, SMTP, and even a Wingman for dating help"
         />
       </div>
 

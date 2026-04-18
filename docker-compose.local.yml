@@ -62,7 +62,7 @@ services:
       - SMTP_DEFAULT_RECIPIENT=${SMTP_DEFAULT_RECIPIENT:-}
 
       # ===================
-      # Flirt Assistant Skill
+      # Wingman Skill
       # ===================
       - FLIRT_USER_NAME=${FLIRT_USER_NAME:-}
       - FLIRT_STYLE=${FLIRT_STYLE:-playful}

@@ -90,7 +90,7 @@ public class AgentService {
             - Use mark_email_read and mark_email_unread to update read status
             - Use analyze_email to get AI-powered response suggestions
 
-            For flirting/dating help (Flirt Assistant):
+            For flirting/dating help (Wingman):
             - Use generate_flirty_response when they share a message they received (ALWAYS ask for the person's name to track their profile)
             - Use generate_opener when they need help starting a conversation with someone new
             - Use analyze_conversation when they want to understand someone's interest level
@@ -99,7 +99,7 @@ public class AgentService {
             - Use list_crushes to see all people being tracked
             - Use forget_crush to delete a profile
 
-            IMPORTANT for Flirt Assistant:
+            IMPORTANT for Wingman:
             - ALWAYS ask for the person's name so you can track and remember them
             - Learn from every message - store interests, personality traits, communication style
             - Reference past messages and known facts to personalize responses
@@ -157,13 +157,13 @@ public class AgentService {
 
             MODE DETECTION:
             When messages start with a mode prefix, focus on that skill:
-            - [Flirt Assistant Mode] = Focus on dating/flirting help. Be charming, witty, and give multiple response options.
+            - [Wingman Mode] = Focus on dating/flirting help. Be charming, witty, and give multiple response options.
             - [Slack Mode] = Focus on sending Slack messages/notifications.
             - [Gmail Mode] = Focus on sending emails via Gmail SMTP.
             - [Gmail API Mode] = Focus on reading, searching, and managing Gmail emails via API.
             - [SMTP Mode] = Focus on sending emails via SMTP.
 
-            When in Flirt Assistant Mode:
+            When in Wingman Mode:
             - Analyze their message and suggest 2-3 response options
             - Range from subtle/safe to bold/confident
             - Keep it natural, not cheesy
@@ -238,7 +238,7 @@ public class AgentService {
         tools.add(FunctionTool.create(smtpTool, "sendDeploymentEmail"));
         log.info("SMTP integration tools registered (configuration checked at runtime)");
 
-        // Flirt Assistant tools
+        // Wingman tools
         tools.add(FunctionTool.create(flirtTool, "generateResponse"));
         tools.add(FunctionTool.create(flirtTool, "generateOpener"));
         tools.add(FunctionTool.create(flirtTool, "analyzeConversation"));
@@ -246,7 +246,7 @@ public class AgentService {
         tools.add(FunctionTool.create(flirtTool, "getProfile"));
         tools.add(FunctionTool.create(flirtTool, "listProfiles"));
         tools.add(FunctionTool.create(flirtTool, "forgetProfile"));
-        log.info("Flirt Assistant tools registered with profile support (configuration checked at runtime)");
+        log.info("Wingman tools registered with profile support (configuration checked at runtime)");
 
         // Custom Skills tools
         tools.add(FunctionTool.create(customSkillTool, "createCustomSkill"));

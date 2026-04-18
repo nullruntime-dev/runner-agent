@@ -135,7 +135,7 @@ function Install-Java {
         throw "Java install appeared to succeed but 'java --version' still reports ${current}. Open a new terminal and re-run."
     }
     Write-Success "Java $current installed"
-}
+}z
 
 function Get-NodeMajorVersion {
     $node = Resolve-OnPath 'node'

@@ -268,7 +268,7 @@ AGENT_TOKEN=secret java -jar griphook-agent.jar \\
         </table>
       </div>
 
-      <h3 className="text-lg font-semibold text-white mt-8 mb-3">Flirt Assistant</h3>
+      <h3 className="text-lg font-semibold text-white mt-8 mb-3">Wingman</h3>
       <p className="text-[#888] mb-4">
         AI-powered wingman to help you craft smooth responses and openers for dating conversations.
       </p>

@@ -90,7 +90,7 @@ public class SkillService {
                     .build(),
             SkillDefinition.builder()
                     .name("flirt")
-                    .displayName("Flirt Assistant")
+                    .displayName("Wingman")
                     .description("AI-powered wingman to help you craft smooth responses and openers for dating conversations")
                     .icon("heart")
                     .configFields(List.of(

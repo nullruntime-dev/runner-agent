@@ -271,7 +271,7 @@ export default async function Home() {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-sm text-white">Flirt Assistant</p>
+                      <p className="text-sm text-white">Wingman</p>
                       <p className="text-xs text-[#888]">AI dating wingman</p>
                     </div>
                   </div>
