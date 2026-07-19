@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,12 +14,7 @@ export async function GET(
   }
 
   try {
-    const res = await fetch(`${agent.url}/agent/schedules`, {
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-      },
-      cache: 'no-store',
-    });
+    const res = await proxyToAgent(agent, '/agent/schedules', { cache: 'no-store' });
 
     if (!res.ok) {
       const error = await res.text();
@@ -47,12 +43,9 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const res = await fetch(`${agent.url}/agent/schedules`, {
+    const res = await proxyToAgent(agent, '/agent/schedules', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 

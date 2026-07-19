@@ -135,11 +135,11 @@ public class ScheduledTaskController {
     @PostMapping("/{id}/run")
     public ResponseEntity<?> runTaskNow(@PathVariable Long id) {
         try {
-            String result = scheduledTaskService.runTaskNow(id);
+            String message = scheduledTaskService.runTaskNow(id);
 
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.accepted().body(Map.of(
                     "success", true,
-                    "result", result
+                    "message", message
             ));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of(

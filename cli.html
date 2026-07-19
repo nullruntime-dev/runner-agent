@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GRIPHOOK CLI</title>
+  <link rel="stylesheet" href="cli.css" />
+  <template id="__bundler_thumbnail" data-bg-color="#06090a">
+    <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1200" height="800" fill="#06090a" />
+      <rect x="470" y="300" width="180" height="180" rx="40" fill="#25e6d4" />
+      <text x="560" y="430" font-family="'JetBrains Mono', monospace" font-size="120" font-weight="800" fill="#03110f" text-anchor="middle">G</text>
+      <text x="690" y="420" font-family="'JetBrains Mono', monospace" font-size="58" font-weight="800" letter-spacing="8" fill="#eafbf9" text-anchor="start">GRIPHOOK</text>
+      <text x="692" y="468" font-family="'JetBrains Mono', monospace" font-size="26" fill="#25e6d4" text-anchor="start">cli</text>
+    </svg>
+  </template>
+
+</head>
+<body>
+  <main class="term-window" data-screen-label="GRIPHOOK CLI">
+    <!-- title bar -->
+    <header class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="title-center">sadsad@localhost: ~/griphook — <b>griphook</b></div>
+      <div class="title-right">
+        <span class="dot d-on"></span><span>connected</span>
+      </div>
+    </header>
+
+    <!-- body -->
+    <section class="term-body">
+      <div id="scrollback"></div>
+
+      <div class="input-wrap">
+        <div class="autocomplete" id="autocomplete"></div>
+        <form id="cli-form" autocomplete="off">
+          <div class="input-shell">
+            <span class="in-glyph">›</span>
+            <textarea id="cli-input" rows="1" spellcheck="false"
+              placeholder="ask the agent, or type a command…  ( /help )"></textarea>
+            <span class="send-hint">⏎ run</span>
+          </div>
+        </form>
+        <div class="hintbar" id="hintbar">
+          <span><kbd>/</kbd> commands</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> history</span>
+          <span><kbd>Tab</kbd> complete</span>
+          <span><kbd>⇧⏎</kbd> new line</span>
+          <span><kbd>esc</kbd> skip stream</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- status bar -->
+    <footer class="statusbar" id="statusbar"></footer>
+  </main>
+
+  <script src="cli-data.js"></script>
+  <script src="cli-render.js"></script>
+  <script src="cli-commands.js"></script>
+  <script src="cli-engine.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8090}
+  port: ${SERVER_PORT:8009}
 
 agent:
   token: ${AGENT_TOKEN:1234}
@@ -8,12 +8,21 @@ agent:
   max-concurrent: ${AGENT_MAX_CONCURRENT:5}
   adk:
     enabled: ${AGENT_ADK_ENABLED:true}
+    provider: ${AGENT_ADK_PROVIDER:ollama}  # "gemini" or "ollama"
     model: ${AGENT_ADK_MODEL:gemini-flash-lite-latest}
     api-key: ${GOOGLE_AI_API_KEY:}
+    # Ollama settings (when provider=ollama)
+    ollama-base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+    ollama-model: ${OLLAMA_MODEL:minimax-m3:cloud}
 
+searxng:
+  base-url: ${SEARXNG_BASE_URL:http://localhost:8081}
+ddgo:
+  base-url: ${DDGO_BASE_URL:https://duckduckgo.com}
+  html: ${DDGO_HTML:https://html.duckduckgo.com/html}
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./agent-data}
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./agent-data;AUTO_SERVER=TRUE}
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

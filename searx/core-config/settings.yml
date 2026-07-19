@@ -1,0 +1,23 @@
+use_default_settings: true
+
+server:
+  secret_key: "6eOcK3yQkVUtiEwkXSxzO7SjQNSDatKw"
+  image_proxy: true
+  limiter: false
+
+search:
+  formats:
+    - html
+    - json
+
+engines:
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: true
+  - name: google
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: google cse
+    disabled: true

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -27,13 +28,8 @@ export async function GET(
   }
 
   try {
-    const url = `${agent.url}/agent/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`;
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-        'Accept': 'text/event-stream',
-      },
+    const response = await proxyToAgent(agent, `/agent/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`, {
+      headers: { Accept: 'text/event-stream' },
     });
 
     if (!response.ok) {

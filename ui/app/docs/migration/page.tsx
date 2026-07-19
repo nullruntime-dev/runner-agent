@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { CodeBlock, InfoBox } from '../components';
 
 export default function MigrationPage() {
@@ -5,94 +6,119 @@ export default function MigrationPage() {
     <div>
       <h1 className="text-3xl font-bold text-white mb-4">Migration</h1>
       <p className="text-[#888] mb-8">
-        Move GRIPHOOK components to new servers or upgrade to new versions.
+        Move GRIPHOOK components to a new server, upgrade versions, or change agent URLs.
       </p>
 
-      <h2 className="text-xl font-bold text-white mb-4">Migrate Control Center</h2>
-      <p className="text-[#888] mb-4">
-        Transfer the SQLite database and configuration to a new server.
-      </p>
+      <InfoBox type="warning" title="Always snapshot first">
+        Back up both databases (<code>ui/data/runner.db</code> and the agent&apos;s H2 files) before any
+        migration. Test in staging if possible. The agent H2 schema auto-evolves via{' '}
+        <code>ddl-auto: update</code>; the Control Center uses Prisma migrations.
+      </InfoBox>
+
+      <h2 className="text-xl font-bold text-white mb-4">Move the Control Center to a new host</h2>
       <CodeBlock language="bash">
-{`# On OLD server
-sudo systemctl stop griphook-control-center
-sqlite3 /opt/griphook-ui/data/griphook.db ".backup '/tmp/griphook.db.backup'"
-scp /tmp/griphook.db.backup newserver:/tmp/
+{`# On the OLD host
+sudo systemctl stop griphook-ui
+sqlite3 /opt/griphook-ui/data/runner.db ".backup '/tmp/runner.db.backup'"
+cp ../settings.json /tmp/settings.json       # one level up from ui/
+scp /tmp/runner.db.backup /tmp/settings.json newhost:/tmp/
 
-# On NEW server
-# Install Node.js 22+, clone repo, npm install, npm run build
+# On the NEW host — install Node 22+, clone the repo
+cd /opt/griphook-ui  # or wherever
+cp /tmp/runner.db.backup data/runner.db
+cp /tmp/settings.json ../settings.json
 
-mkdir -p /opt/griphook-ui/data
-cp /tmp/griphook.db.backup /opt/griphook-ui/data/griphook.db
+npm install
+npx prisma generate
+npm run build
+npm start           # or use a systemd unit (see Deployment docs)
 
-# Run migrations if upgrading
-cd /opt/griphook-ui
-npx prisma migrate deploy
-
-sudo systemctl start griphook-control-center`}
+# Then register every agent in the UI; tokens don&apos;t migrate with the JSON export
+# (Settings → Database → Download JSON strips them for safety).`}
       </CodeBlock>
 
-      <h2 className="text-xl font-bold text-white mt-10 mb-4">Migrate Agent</h2>
-      <p className="text-[#888] mb-4">
-        Preserve execution history when moving to a new server.
-      </p>
+      <h2 className="text-xl font-bold text-white mt-10 mb-4">Move an agent to a new host</h2>
       <CodeBlock language="bash">
-{`# On OLD server
+{`# On the OLD host
 sudo systemctl stop griphook-agent
-scp /opt/griphook-agent/agent-data.mv.db newserver:/opt/griphook-agent/
-scp /opt/griphook-agent/griphook-agent.jar newserver:/opt/griphook-agent/
+scp /opt/griphook-agent/agent-data.mv.db newhost:/opt/griphook-agent/
+scp /opt/griphook-agent/agent-data.trace.db newhost:/opt/griphook-agent/ 2>/dev/null || true
+# Plus your env / settings.json if applicable
 
-# On NEW server
-# Set up systemd service (see Deployment docs)
+# On the NEW host — install the JAR and systemd unit (see Deployment)
 sudo systemctl start griphook-agent
 
-# Update Control Center
-# Go to /agents and update the agent URL`}
+# Update the Control Center
+# 1. Open Manage Agents
+# 2. Click Edit on the moved agent
+# 3. Change the URL to https://newhost:8090
+# 4. Save
+# Executions stay mirrored in the UI cache; new ones sync automatically.`}
       </CodeBlock>
 
-      <h2 className="text-xl font-bold text-white mt-10 mb-4">Schema Migrations</h2>
-      <p className="text-[#888] mb-4">
-        When upgrading to a new version with schema changes:
-      </p>
-      <CodeBlock language="bash">
-{`# Pull latest version
-git pull origin main
-
-# Install dependencies
-npm install
-
-# Generate Prisma client
-npx prisma generate
-
-# Apply migrations
-npx prisma migrate deploy
-
-# Rebuild
-npm run build
-
-# Restart
-sudo systemctl restart griphook-control-center`}
-      </CodeBlock>
-
-      <h2 className="text-xl font-bold text-white mt-10 mb-4">Change Agent URL</h2>
-      <p className="text-[#888] mb-4">
-        If you change an agent&apos;s IP or hostname:
-      </p>
+      <h2 className="text-xl font-bold text-white mt-10 mb-4">Change an agent&apos;s URL (same host, new port)</h2>
       <ol className="list-decimal list-inside text-[#888] space-y-2 mb-6">
-        <li>Go to the Control Center dashboard</li>
-        <li>Navigate to <code className="text-[#ff6600]">/agents</code></li>
-        <li>Delete the old agent entry</li>
-        <li>Add the agent again with the new URL</li>
+        <li>Open the <Link href="/agents" className="text-[#00fff2] hover:underline">Manage Agents</Link> page</li>
+        <li>Click <strong>Edit</strong> on the agent</li>
+        <li>Update the <strong>Agent URL</strong> field</li>
+        <li>If the backend now uses a different token, paste it into the <strong>API Token</strong> field too</li>
+        <li>Click <strong>Save Changes</strong></li>
       </ol>
       <p className="text-[#888] text-sm">
-        Note: Execution history is preserved in the Control Center&apos;s cache even after re-adding.
+        Execution history is preserved in the Control Center&apos;s cache; new executions will sync against
+        the new URL on the next <code>/api/sync</code> call.
       </p>
 
-      <div className="mt-8">
-        <InfoBox type="warning" title="Migration Warning">
-          Always backup databases before migration. Test in staging first.
-          The agent H2 database uses <code>ddl-auto: update</code> which auto-migrates on startup.
-        </InfoBox>
-      </div>
+      <h2 className="text-xl font-bold text-white mt-10 mb-4">Upgrade the version</h2>
+      <p className="text-[#888] mb-4">Standard upgrade flow:</p>
+      <CodeBlock language="bash">
+{`# Pull
+cd runner-agent
+git pull origin main
+
+# Backend (rebuilds the JAR; H2 auto-migrates schema on start)
+./gradlew clean bootJar
+sudo systemctl restart griphook-agent
+
+# Control Center
+cd ui
+npm install
+npx prisma generate          # required after any prisma/schema.prisma change
+npm run build
+sudo systemctl restart griphook-ui    # or however you run the UI`}
+      </CodeBlock>
+
+      <InfoBox type="info" title="Schema migrations">
+        The Control Center ships a single migration at <code>prisma/migrations/20260228064205_init</code>.
+        In Docker, <code>docker-entrypoint.sh</code> applies it directly with <code>sqlite3</code> rather than{' '}
+        <code>prisma migrate deploy</code> — the SQL is identical. Locally,{' '}
+        <code>npx prisma generate</code> is all you need for the first run; for schema changes, generate a new
+        migration and apply it.
+      </InfoBox>
+
+      <h2 className="text-xl font-bold text-white mt-10 mb-4">Run two agents on the same host</h2>
+      <p className="text-[#888] mb-4">
+        Useful for testing blue/green, canary deploys, or running prod + staging on one box. Each
+        agent needs a different port, working directory, H2 file, and token.
+      </p>
+      <CodeBlock language="bash">
+{`# Agent A on 8090
+SERVER_PORT=8090 \\
+AGENT_TOKEN=token-A \\
+SPRING_DATASOURCE_URL='jdbc:h2:file:./agent-data-a;AUTO_SERVER=TRUE' \\
+AGENT_WORKING_DIR=/opt/agent-a \\
+./gradlew bootRun
+
+# Agent B on 8091
+SERVER_PORT=8091 \\
+AGENT_TOKEN=token-B \\
+SPRING_DATASOURCE_URL='jdbc:h2:file:./agent-data-b;AUTO_SERVER=TRUE' \\
+AGENT_WORKING_DIR=/opt/agent-b \\
+./gradlew bootRun`}
+      </CodeBlock>
+      <p className="text-[#888] text-sm mt-2">
+        Then add both to the UI (Manage Agents → Add New Agent).
+      </p>
     </div>
   );
 }

@@ -25,6 +25,19 @@ import org.springframework.context.annotation.Configuration;
 public class AdkConfig {
 
     private boolean enabled = true;
+    private String provider = "gemini";  // "gemini" or "ollama"
     private String model = "gemini-2.0-flash";
     private String apiKey;
+
+    // Ollama settings
+    private String ollamaBaseUrl = "http://127.0.0.1:11434";
+    private String ollamaModel = "llama3.1:8b";
+
+    public boolean isOllama() {
+        return "ollama".equalsIgnoreCase(provider);
+    }
+
+    public boolean isGemini() {
+        return "gemini".equalsIgnoreCase(provider);
+    }
 }

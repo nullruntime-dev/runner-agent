@@ -39,15 +39,24 @@
                                       FilterChain filterChain) throws ServletException, IOException {
           String path = request.getRequestURI();
 
-          // Skip auth for health, H2 console, and OAuth callbacks
-          if (path.equals("/health") || path.startsWith("/h2-console") || path.equals("/agent/gmail/auth/callback")) {
+          // Skip auth for health, H2 console, OAuth callback, and CORS preflight
+          if (path.equals("/health") || path.startsWith("/h2-console")
+                  || path.equals("/agent/gmail/auth/callback")
+                  || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
               filterChain.doFilter(request, response);
               return;
           }
 
           String authHeader = request.getHeader("Authorization");
 
+          // EventSource (SSE) can't set Authorization header — accept token
+          // via ?token= query param as a fallback for /chat/stream and /logs.
           if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+              String queryToken = request.getParameter("token");
+              if (queryToken != null && queryToken.equals(agentConfig.getToken())) {
+                  filterChain.doFilter(request, response);
+                  return;
+              }
               sendUnauthorized(response);
               return;
           }

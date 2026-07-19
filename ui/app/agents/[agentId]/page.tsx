@@ -63,43 +63,26 @@ export default async function AgentDetailPage({ params }: PageProps) {
   const failedCount = executions.filter(e => e.status === 'FAILED').length;
 
   return (
-    <main className="min-h-screen bg-[#050505]">
-      {/* Header */}
-      <header className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+    <main>
+      {/* Agent Info Bar */}
+      <div className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
+        <div className="max-w-7xl mx-auto px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-[#888] hover:text-white transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </Link>
-            <div className="h-4 w-px bg-[#2a2a2a]" />
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 ${isOnline ? 'bg-[#00ff66] shadow-[0_0_8px_rgba(0,255,102,0.5)]' : 'bg-[#ff0044]'}`} />
               <span className="text-sm font-semibold text-white tracking-tight">{agent.name}</span>
             </div>
             <div className="h-4 w-px bg-[#2a2a2a]" />
             <span className="text-xs text-[#888]">{agent.url}</span>
-          </div>
-          <div className="flex items-center gap-3">
             <span className={`text-xs font-medium ${isOnline ? 'text-[#00ff66]' : 'text-[#ff0044]'}`}>
               {isOnline ? 'ONLINE' : 'OFFLINE'}
             </span>
-            {isOnline && (
-              <Link
-                href={`/agents/${agentId}/chat`}
-                className="h-8 px-3 bg-gradient-to-r from-[#00fff2] to-[#00cccc] hover:from-[#00cccc] hover:to-[#00fff2] text-black text-xs font-medium transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(0,255,242,0.3)]"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                AI CHAT
-              </Link>
-            )}
+          </div>
+          <div className="flex items-center gap-3">
             <DeleteAgentButton agentId={agentId} agentName={agent.name} />
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Stats Bar */}
       <div className="bg-[#0a0a0a] border-b border-[#1a1a1a]">

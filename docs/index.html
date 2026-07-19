@@ -79,6 +79,25 @@
       }
     }
 
+    @media (max-width: 480px) {
+      .container { padding: 0 14px; }
+      .install-platform { padding: 16px 14px; }
+      .install-platform-header { flex-wrap: wrap; }
+      .install-platform-recommended-badge { font-size: 8px; padding: 2px 6px; }
+      .install-method-title .name { font-size: 12px; }
+      .install-method-prereq { gap: 4px; }
+      .install-prereq-pill { font-size: 9px; padding: 2px 6px; }
+      .install-method-title .badge { font-size: 8px; padding: 2px 5px; }
+      .install-method-meta { font-size: 9px; gap: 8px; }
+      .install-method-code { padding: 6px 8px; gap: 6px; }
+      .install-method-code code { font-size: 10.5px; }
+      .install-method-copy { font-size: 9px; padding: 3px 6px; }
+      .install-after-card { padding: 14px; }
+      .install-after-card code { font-size: 10.5px; padding: 5px 6px; }
+      .install-platform-pm { gap: 4px; }
+      .install-pm-pill { font-size: 9px; padding: 2px 6px; }
+    }
+
     /* Grid background */
     .grid-bg {
       position: fixed;
@@ -1404,6 +1423,572 @@
       color: var(--lime);
     }
 
+    /* Auto-detect strip (top of oneliner section) */
+    .oneliner-detect {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .oneliner-detect-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .oneliner-detect-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      color: var(--cyan);
+    }
+    .oneliner-detect-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 255, 242, 0.1);
+      border: 1px solid rgba(0, 255, 242, 0.3);
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+    .oneliner-detect-pill .detect-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--cyan);
+    }
+    .oneliner-detect .fallback {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .oneliner-detect .fallback code {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+      font-size: 10.5px;
+    }
+
+    /* Per-OS oneliner card (vertical) */
+    .oneliner-card-v {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+    .oneliner-card-v::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    }
+    .oneliner-card-v.primary::before {
+      background: linear-gradient(90deg, var(--lime), var(--cyan));
+      height: 3px;
+    }
+    .oneliner-card-v-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .oneliner-card-v-header h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.3px;
+    }
+    .oneliner-card-v .easiest-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 255, 102, 0.1);
+      border: 1px solid rgba(0, 255, 102, 0.3);
+      color: var(--lime);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 2px 6px;
+    }
+    .oneliner-card-v .easiest-badge::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      background: var(--lime);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--lime);
+    }
+    .oneliner-card-v-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+    }
+    .oneliner-card-v-desc strong {
+      color: var(--text-primary);
+    }
+    .oneliner-card-v .oneliner-code {
+      font-size: 12.5px;
+    }
+    .oneliner-card-v .oneliner-code code {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .oneliner-card-v-requires {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .oneliner-card-v-requires .label {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .oneliner-card-v-requires .req {
+      color: var(--orange);
+      font-weight: 600;
+    }
+    .oneliner-card-v-requires .req.met {
+      color: var(--lime);
+    }
+    .oneliner-card-v-after {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      margin-top: 2px;
+    }
+    .oneliner-card-v-after strong {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .oneliner-card-v-after code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      padding: 1px 5px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      margin-left: 4px;
+    }
+    .oneliner-card-v-after a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+    .oneliner-card-v-after a:hover {
+      text-decoration: underline;
+    }
+
+    /* Side-by-side oneliner cards */
+    .oneliner-grid-v {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 720px) {
+      .oneliner-grid-v { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .oneliner-detect { flex-wrap: wrap; padding: 8px 10px; }
+      .oneliner-detect .fallback { width: 100%; margin-top: 4px; }
+      .oneliner-card-v { padding: 14px 12px; }
+      .oneliner-card-v .oneliner-code { font-size: 11.5px; padding: 8px; }
+      .oneliner-card-v-after code { font-size: 9.5px; }
+    }
+
+    /* Install matrix: per-OS install methods */
+    .install-matrix {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 1100px) {
+      .install-matrix { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 720px) {
+      .install-matrix { grid-template-columns: 1fr; gap: 12px; }
+      .install-platform { padding: 20px 18px; }
+      .install-platform-recommended-badge { font-size: 8px; padding: 2px 6px; }
+      .install-platform-header { flex-wrap: wrap; gap: 8px 12px; }
+      .install-method-header { flex-wrap: wrap; gap: 8px 12px; }
+      .install-method-title { flex-wrap: wrap; }
+      .install-method-meta { width: 100%; justify-content: flex-start; }
+      .install-method-code { font-size: 11px; padding: 8px; }
+      .install-method-code code {
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    }
+    .install-platform {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 24px;
+      transition: all 0.2s;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .install-platform::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    }
+    .install-platform:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-2px);
+    }
+    .install-platform-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .install-platform-header h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+    }
+    .install-platform-header svg {
+      color: var(--cyan);
+    }
+    .install-platform-pm {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .install-pm-pill {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      background: rgba(0, 255, 242, 0.08);
+      border: 1px solid rgba(0, 255, 242, 0.2);
+      color: var(--cyan);
+    }
+    .install-method {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+    .install-method:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .install-method-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--lime);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .install-method-code {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      overflow-x: auto;
+    }
+    .install-method-code code {
+      flex: 1;
+      background: none;
+      padding: 0;
+      color: inherit;
+      font-family: inherit;
+      font-size: inherit;
+      white-space: nowrap;
+    }
+    .install-method-copy {
+      flex-shrink: 0;
+      background: rgba(0, 255, 242, 0.1);
+      border: 1px solid rgba(0, 255, 242, 0.4);
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .install-method-copy:hover {
+      background: rgba(0, 255, 242, 0.2);
+      color: var(--text-primary);
+    }
+    .install-method-copy.copied {
+      background: rgba(57, 255, 20, 0.15);
+      border-color: var(--lime);
+      color: var(--lime);
+    }
+
+    /* Install method header (numbered, with time) */
+    .install-method-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .install-method-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--lime);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .install-method-title .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      background: var(--lime);
+      color: var(--bg-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .install-method-title .name {
+      color: var(--text-primary);
+    }
+    .install-method-title .badge {
+      font-size: 9px;
+      padding: 2px 6px;
+      background: rgba(0, 255, 102, 0.12);
+      color: var(--lime);
+      border: 1px solid rgba(0, 255, 102, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 700;
+    }
+    .install-method-title .badge.alt {
+      background: rgba(255, 0, 234, 0.08);
+      color: var(--magenta);
+      border-color: rgba(255, 0, 234, 0.25);
+    }
+    .install-method-title .badge.dev {
+      background: rgba(0, 255, 242, 0.08);
+      color: var(--cyan);
+      border-color: rgba(0, 255, 242, 0.25);
+    }
+    .install-method-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .install-method-meta .time::before {
+      content: '⏱ ';
+      color: var(--cyan);
+    }
+    .install-method-meta .size::before {
+      content: '↓ ';
+      color: var(--cyan);
+    }
+
+    .install-method-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    .install-method-desc strong {
+      color: var(--text-primary);
+    }
+
+    .install-method-prereq {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .install-prereq-pill {
+      font-size: 10px;
+      padding: 2px 7px;
+      background: rgba(255, 102, 0, 0.08);
+      border: 1px solid rgba(255, 102, 0, 0.25);
+      color: var(--orange);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .install-prereq-pill.met {
+      background: rgba(0, 255, 102, 0.06);
+      border-color: rgba(0, 255, 102, 0.2);
+      color: var(--lime);
+    }
+
+    .install-method-after {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+    .install-method-after strong {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .install-method-after code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 1px 5px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    /* Highlighted "recommended" platform card */
+    .install-platform.recommended {
+      border-color: rgba(0, 255, 102, 0.4);
+    }
+    .install-platform.recommended::before {
+      background: linear-gradient(90deg, var(--lime), var(--cyan));
+      height: 3px;
+    }
+    .install-platform-recommended-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 255, 102, 0.12);
+      border: 1px solid rgba(0, 255, 102, 0.4);
+      color: var(--lime);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .install-platform-recommended-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--lime);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--lime);
+    }
+
+    /* "After install" panel across all platforms */
+    .install-after {
+      margin-top: 40px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 24px;
+    }
+    .install-after::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--lime), var(--cyan));
+    }
+    .install-after-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .install-after-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+    }
+    .install-after-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 1100px) {
+      .install-after-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 720px) {
+      .install-after-grid { grid-template-columns: 1fr; }
+    }
+    .install-after-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      padding: 16px;
+    }
+    .install-after-card h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .install-after-card p {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .install-after-card code {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      word-break: break-all;
+    }
+    .install-after-card code:last-child {
+      margin-bottom: 0;
+    }
+
     .requirements-box::before {
       content: '';
       position: absolute;
@@ -2509,7 +3094,7 @@
             <span class="stroke glitch" data-text="confidence">confidence</span>
           </h1>
           <p class="hero-subtitle">
-            Powered by <strong style="color: var(--cyan);">Google Gemini</strong>. Execute commands, stream logs in real-time, and build custom skills through natural language.
+            Powered by <strong style="color: var(--cyan);">Google ADK</strong> with <strong style="color: var(--cyan);">Gemini</strong> or <strong style="color: var(--cyan);">Ollama</strong>. Execute commands, stream logs in real-time, and build custom skills through natural language.
           </p>
           <div class="hero-cta">
             <a href="#getting-started" class="btn btn-primary">
@@ -2530,7 +3115,7 @@
               <div class="stat-label">Deploy Time</div>
             </div>
             <div class="stat reveal reveal-delay-2">
-              <div class="stat-value">6<span class="accent">+</span></div>
+              <div class="stat-value">10<span class="accent">+</span></div>
               <div class="stat-label">Built-in Skills</div>
             </div>
             <div class="stat reveal reveal-delay-3">
@@ -2714,6 +3299,49 @@
           <h3>Gmail API</h3>
           <p>Full Gmail access via OAuth2. Read, search, and reply to emails. Analyze messages with AI.</p>
         </div>
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-number">09</div>
+          <div class="feature-icon" style="background: rgba(255, 102, 0, 0.15); color: #ff6600; border-color: rgba(255, 102, 0, 0.3);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3>Scheduled Tasks</h3>
+          <p>Set up cron or interval-based autopilot schedules. Trigger prompts or command skills on a timer.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-number">10</div>
+          <div class="feature-icon" style="background: rgba(153, 0, 255, 0.15); color: #9900ff; border-color: rgba(153, 0, 255, 0.3);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </div>
+          <h3>Multi-Agent Control Plane</h3>
+          <p>Manage every agent from one dashboard. The Control Center mirrors executions into local SQLite and keeps history queryable.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-number">11</div>
+          <div class="feature-icon" style="background: rgba(0, 255, 102, 0.15); color: #00ff66; border-color: rgba(0, 255, 102, 0.3);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+            </svg>
+          </div>
+          <h3>One-Click Database Backup</h3>
+          <p>Export the entire Control Center as JSON or SQLite from <code>Settings → Database</code>. Restore on a new host in minutes.</p>
+        </div>
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-number">12</div>
+          <div class="feature-icon" style="background: rgba(255, 0, 68, 0.15); color: #ff0044; border-color: rgba(255, 0, 68, 0.3);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+          </div>
+          <h3>Persistent Chat History</h3>
+          <p>Every conversation is saved per agent. New chats, search, and rewind to any previous thread from the sidebar.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -2887,31 +3515,440 @@
         </div>
         <h3>Install in a single command</h3>
         <p>Pick your platform, paste into a terminal, and Griphook handles the rest &mdash; dependencies, build, services, and startup.</p>
-        <div class="oneliner-grid">
-          <div class="oneliner-card">
-            <div class="oneliner-platform">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+        <!-- Auto-detect strip: shows the user's platform when JS is available -->
+        <div class="oneliner-detect" id="onelinerDetect">
+          <div class="oneliner-detect-left">
+            <svg class="oneliner-detect-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <span>We detected your platform:</span>
+            <span class="oneliner-detect-pill" id="detectPill">
+              <span class="detect-dot"></span>
+              <span id="detectLabel">checking...</span>
+            </span>
+            <span class="fallback">&mdash; the matching command is highlighted below.</span>
+          </div>
+        </div>
+
+        <div class="oneliner-grid-v">
+
+          <!-- Linux / macOS (primary, recommended) -->
+          <div class="oneliner-card-v primary" id="onelinerCardUnix">
+            <div class="oneliner-card-v-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3M13 15h3M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>
               </svg>
-              Linux / macOS
+              <h4>macOS &middot; Linux</h4>
+              <span class="easiest-badge">Easiest</span>
+            </div>
+            <p class="oneliner-card-v-desc">
+              <strong>Recommended for most users.</strong> Opens an interactive menu &mdash; choose Docker, Standalone JAR, or Build from Source. Auto-installs dependencies if missing.
+            </p>
+            <div class="oneliner-card-v-requires">
+              <span class="label">Needs:</span>
+              <span class="req met">curl</span>
+              <span class="req met">sudo or root</span>
+              <span class="req">~5 min</span>
             </div>
             <div class="oneliner-code">
               <code id="oneliner-unix">curl -fsSL https://griphook.dev/install.sh | bash</code>
               <button class="oneliner-copy" onclick="copyOneliner(this, 'oneliner-unix')">Copy</button>
             </div>
+            <div class="oneliner-card-v-after">
+              <strong>Then open:</strong> <a href="http://localhost:3000">http://localhost:3000</a> &middot; <strong>Agent:</strong> <a href="http://localhost:8090">http://localhost:8090</a>
+            </div>
           </div>
-          <div class="oneliner-card">
-            <div class="oneliner-platform">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+          <!-- Windows (PowerShell) -->
+          <div class="oneliner-card-v" id="onelinerCardWin">
+            <div class="oneliner-card-v-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
               </svg>
-              Windows (PowerShell)
+              <h4>Windows &middot; PowerShell</h4>
+            </div>
+            <p class="oneliner-card-v-desc">
+              Pulls Java 21, Node 22, and Git via <code style="background: var(--bg-elevated); padding: 1px 4px;">winget</code>, then registers two Windows services (<code style="background: var(--bg-elevated); padding: 1px 4px;">Griphook</code> + <code style="background: var(--bg-elevated); padding: 1px 4px;">GriphookUI</code>).
+            </p>
+            <div class="oneliner-card-v-requires">
+              <span class="label">Needs:</span>
+              <span class="req">Admin PowerShell</span>
+              <span class="req">winget</span>
+              <span class="req">~5 min</span>
             </div>
             <div class="oneliner-code">
               <code id="oneliner-win">irm https://griphook.dev/install.ps1 | iex</code>
               <button class="oneliner-copy" onclick="copyOneliner(this, 'oneliner-win')">Copy</button>
             </div>
+            <div class="oneliner-card-v-after">
+              <strong>If you get an execution-policy error:</strong> <code>Set-ExecutionPolicy -Scope Process Bypass</code>
+            </div>
           </div>
+
+        </div>
+      </div>
+
+      <!-- Install matrix: per-OS install methods -->
+      <div class="install-matrix-wrap reveal" style="margin-top: 40px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--lime);">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.3px;">Install for your platform</h3>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+          Every method the interactive installer supports, grouped by OS. The one-liner above picks the right one automatically; these are the individual commands if you want to script it.
+        </p>
+
+        <div class="install-matrix">
+
+          <!-- macOS -->
+          <div class="install-platform recommended">
+            <div class="install-platform-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+              </svg>
+              <h4>macOS</h4>
+              <span class="install-platform-recommended-badge">Most popular</span>
+            </div>
+            <div class="install-platform-pm">
+              <span class="install-pm-pill">Homebrew</span>
+              <span class="install-pm-pill">Docker Desktop</span>
+              <span class="install-pm-pill">macOS 12+</span>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">1</span>
+                  <span class="name">Install Docker Desktop</span>
+                  <span class="badge">Easiest</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~3 min</span>
+                  <span class="size">~700 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>Recommended path.</strong> Runs the agent and UI in isolated containers &mdash; no need to install Java, Node, or Git. Works on every Mac.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill met">Homebrew (any version)</span>
+              </div>
+              <div class="install-method-code">
+                <code>brew install --cask docker &amp;&amp; open -a Docker</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+              <div class="install-method-after">
+                <span>&rarr; then run:</span>
+                <code>curl -fsSL https://griphook.dev/install.sh | bash -s -- --docker</code>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">2</span>
+                  <span class="name">Standalone JAR</span>
+                  <span class="badge alt">No Docker</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~2 min</span>
+                  <span class="size">~60 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For native macOS.</strong> The installer builds the agent JAR, sets up a <code>launchd</code> service, and runs the UI under <code>node</code>. No virtualization, no containers.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill">Java 21+</span>
+                <span class="install-prereq-pill">Node.js 22+</span>
+              </div>
+              <div class="install-method-code">
+                <code>brew install openjdk@21 node@22 git &amp;&amp; curl -fsSL https://griphook.dev/install.sh | bash -s -- --jar</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">3</span>
+                  <span class="name">Build from Source</span>
+                  <span class="badge dev">Developers</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~5 min</span>
+                  <span class="size">~200 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For contributors.</strong> Clones the repo, runs <code>./gradlew bootJar</code>, installs a <code>launchd</code> service. Use this if you plan to edit the source.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill">Java 21+</span>
+                <span class="install-prereq-pill">Node.js 22+</span>
+                <span class="install-prereq-pill">Git</span>
+                <span class="install-prereq-pill">Gradle (auto-downloaded)</span>
+              </div>
+              <div class="install-method-code">
+                <code>brew install openjdk@21 node@22 git &amp;&amp; curl -fsSL https://griphook.dev/install.sh | bash -s -- --source</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linux -->
+          <div class="install-platform">
+            <div class="install-platform-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.504 0c-.155 0-.315.008-.483.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.632-.309 2.65L1.712 20.16c-.28 1.025.32 1.652 1.215 1.783 1.79.262 3.34.32 5.084.382 1.765.063 3.34.094 4.59-.194.59-.136 1.04-.355 1.392-.79.385-.42.62-.95.79-1.55.13-.467.27-.943.39-1.426.27-.062.518-.125.78-.25 1.156-.557 1.563-1.411 1.563-2.49 0-.063-.008-.124-.013-.187.546-.44.913-1.1.913-1.83 0-.512-.16-.98-.434-1.378.213-.706.215-1.523-.066-2.224-.413-1.04-1.245-1.83-2.256-2.107-.066-.443-.18-.844-.359-1.224-.475-1.013-1.362-1.795-2.448-1.985-.025-.443-.077-.85-.184-1.243-.36-1.314-1.452-2.143-2.806-2.243-.467-.035-.93-.044-1.394-.044z"/>
+              </svg>
+              <h4>Linux</h4>
+            </div>
+            <div class="install-platform-pm">
+              <span class="install-pm-pill">apt</span>
+              <span class="install-pm-pill">dnf</span>
+              <span class="install-pm-pill">pacman</span>
+              <span class="install-pm-pill">zypper</span>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">1</span>
+                  <span class="name">Install Docker</span>
+                  <span class="badge">Easiest</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~2 min</span>
+                  <span class="size">~150 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>Recommended path.</strong> The installer auto-detects your package manager and installs Docker if missing. Then it runs the agent and UI in containers &mdash; no host pollution, no version conflicts.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill met">sudo or root</span>
+                <span class="install-prereq-pill met">curl</span>
+              </div>
+              <div class="install-method-code">
+                <code>curl -fsSL https://griphook.dev/install.sh | bash -s -- --docker</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+              <div class="install-method-after">
+                <span>Docker is auto-installed for <code>apt</code> / <code>dnf</code> / <code>pacman</code> / <code>zypper</code>.</span>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">2</span>
+                  <span class="name">Standalone JAR</span>
+                  <span class="badge alt">No Docker</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~3 min</span>
+                  <span class="size">~200 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For bare-metal or VMs.</strong> The installer builds the agent JAR, creates a <code>systemd</code> service, and runs the UI under <code>node</code>. Native performance.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill">Java 21+</span>
+                <span class="install-prereq-pill">Node.js 22+</span>
+                <span class="install-prereq-pill">systemd</span>
+              </div>
+              <div class="install-method-code">
+                <code>curl -fsSL https://griphook.dev/install.sh | bash -s -- --jar</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">3</span>
+                  <span class="name">Build from Source</span>
+                  <span class="badge dev">Developers</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~5 min</span>
+                  <span class="size">~300 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For contributors.</strong> Clones the repo, runs <code>./gradlew bootJar</code>, installs a <code>systemd</code> service. Use this if you plan to edit the source.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill">Java 21+</span>
+                <span class="install-prereq-pill">Node.js 22+</span>
+                <span class="install-prereq-pill">Git</span>
+              </div>
+              <div class="install-method-code">
+                <code>curl -fsSL https://griphook.dev/install.sh | bash -s -- --source</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">4</span>
+                  <span class="name">Ubuntu Sandbox</span>
+                  <span class="badge alt">Test only</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~4 min</span>
+                  <span class="size">~1.2 GB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For trying it out.</strong> Runs Griphook inside a Docker container with <code>systemd</code>, exposed on <code>localhost:8090</code> and <code>:3000</code>. Great for demos and quick experiments &mdash; not for production.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill met">Docker</span>
+              </div>
+              <div class="install-method-code">
+                <code>curl -fsSL https://griphook.dev/install.sh | bash -s -- --sandbox</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Windows -->
+          <div class="install-platform">
+            <div class="install-platform-header">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949 9.602L24 24V12.6H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+              </svg>
+              <h4>Windows</h4>
+            </div>
+            <div class="install-platform-pm">
+              <span class="install-pm-pill">PowerShell 5+</span>
+              <span class="install-pm-pill">winget</span>
+              <span class="install-pm-pill">NSSM</span>
+              <span class="install-pm-pill">Windows 10+</span>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">1</span>
+                  <span class="name">PowerShell (one-liner)</span>
+                  <span class="badge">Easiest</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~3 min</span>
+                  <span class="size">~250 MB</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>Run in an elevated PowerShell.</strong> The installer pulls Java 21, Node 22, and Git via <code>winget</code>, builds both halves, and registers two Windows services (<code>Griphook</code> + <code>GriphookUI</code>) via NSSM.
+              </p>
+              <div class="install-method-prereq">
+                <span class="install-prereq-pill met">Run as Administrator</span>
+                <span class="install-prereq-pill met">winget (built-in on Win11 / App Installer on Win10)</span>
+              </div>
+              <div class="install-method-code">
+                <code>irm https://griphook.dev/install.ps1 | iex</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+              <div class="install-method-after">
+                <span>If you get an execution-policy error, run first:</span>
+                <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">2</span>
+                  <span class="name">Batch Wrapper</span>
+                  <span class="badge alt">Auto-elevates</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~3 min</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>If <code>iex</code> feels weird.</strong> The <code>.bat</code> file auto-requests UAC elevation and bypasses PowerShell execution policy. Useful for double-click installs.
+              </p>
+              <div class="install-method-code">
+                <code>curl -fsSL https://griphook.dev/install.bat -o install.bat &amp;&amp; install.bat</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+
+            <div class="install-method">
+              <div class="install-method-header">
+                <div class="install-method-title">
+                  <span class="step-num">3</span>
+                  <span class="name">Agent Only (no UI)</span>
+                  <span class="badge dev">Add to existing UI</span>
+                </div>
+                <div class="install-method-meta">
+                  <span class="time">~2 min</span>
+                </div>
+              </div>
+              <p class="install-method-desc">
+                <strong>For adding a Windows agent to a UI already running elsewhere.</strong> Skips the UI install &mdash; only the agent JAR and <code>Griphook</code> service get installed. Register the agent in the UI via <em>Manage Agents &rarr; Add</em> after.
+              </p>
+              <div class="install-method-code">
+                <code>irm https://griphook.dev/install.ps1 | iex -SkipUI</code>
+                <button class="install-method-copy" onclick="copyInstallCmd(this)">Copy</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- After install: manage the service per OS -->
+        <div class="install-after reveal" style="position: relative;">
+          <div class="install-after-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--lime);">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <h3>After install &mdash; manage the service</h3>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+            The installer creates platform-native services so Griphook auto-starts on boot. Here&apos;s how to control them on each OS.
+          </p>
+
+          <div class="install-after-grid">
+
+            <div class="install-after-card">
+              <h4>macOS (launchd)</h4>
+              <p>Service plists land in <code>~/Library/LaunchAgents/</code>.</p>
+              <code>launchctl list | grep griphook</code>
+              <code>launchctl unload ~/Library/LaunchAgents/dev.griphook.agent.plist</code>
+              <code>launchctl load ~/Library/LaunchAgents/dev.griphook.agent.plist</code>
+            </div>
+
+            <div class="install-after-card">
+              <h4>Linux (systemd)</h4>
+              <p>Units at <code>/etc/systemd/system/griphook-*.service</code>.</p>
+              <code>systemctl status griphook-agent griphook-ui</code>
+              <code>sudo systemctl restart griphook-agent</code>
+              <code>sudo journalctl -u griphook-agent -f</code>
+            </div>
+
+            <div class="install-after-card">
+              <h4>Windows (NSSM)</h4>
+              <p>Two services: <code>Griphook</code> + <code>GriphookUI</code>.</p>
+              <code>Get-Service Griphook, GriphookUI</code>
+              <code>Restart-Service Griphook, GriphookUI</code>
+              <code>Stop-Service Griphook, GriphookUI</code>
+            </div>
+
+          </div>
+
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">
+            Open the dashboard at <a href="http://localhost:3000" style="color: var(--cyan);">http://localhost:3000</a> (agent on <a href="http://localhost:8090" style="color: var(--cyan);">http://localhost:8090</a>). Default token is <code>1234</code> &mdash; the setup wizard will prompt you to change it on first launch.
+          </p>
         </div>
       </div>
 
@@ -2922,21 +3959,21 @@
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <h4>Powered by Google Gemini</h4>
+          <h4>Choose your AI provider</h4>
         </div>
-        <p>Griphook uses <strong>Google Gemini</strong> for AI chat capabilities. You'll need a free API key to enable AI features.</p>
+        <p>Griphook uses <strong>Google ADK</strong> for AI chat. Pick <strong>Gemini</strong> (cloud) or <strong>Ollama</strong> (local) — switch anytime from <code>Settings → AI Configuration</code> with no restart.</p>
         <div class="requirements-grid">
           <div class="requirement-item">
             <span class="requirement-label">GOOGLE_AI_API_KEY</span>
-            <span class="requirement-desc">Get your free key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a></span>
+            <span class="requirement-desc">Free key for Gemini at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> (only required when using Gemini)</span>
           </div>
           <div class="requirement-item">
             <span class="requirement-label">AGENT_TOKEN</span>
-            <span class="requirement-desc">Your secret token for API authentication (any string you choose)</span>
+            <span class="requirement-desc">Your secret token for API authentication. Use 32+ random chars in production. Default: <code>1234</code> (dev only).</span>
           </div>
           <div class="requirement-item">
-            <span class="requirement-label">AGENT_ADK_MODEL</span>
-            <span class="requirement-desc">Model to use: <code>gemini-2.0-flash</code>, <code>gemini-1.5-pro</code>, <code>gemini-1.5-flash</code></span>
+            <span class="requirement-label">AGENT_ADK_PROVIDER</span>
+            <span class="requirement-desc">Default: <code>ollama</code> (with <code>minimax-m3:cloud</code>). Set to <code>gemini</code> to use Google Gemini instead.</span>
           </div>
         </div>
       </div>
@@ -2955,8 +3992,8 @@
             <div class="gs-step-number">2</div>
             <div class="gs-step-content">
               <h4>Configure environment</h4>
-              <p>Set your API key and auth token in the .env file.</p>
-              <code>GOOGLE_AI_API_KEY=your-gemini-key<br>AGENT_TOKEN=your-secret-token<br>AGENT_ADK_MODEL=gemini-2.0-flash</code>
+              <p>Set your API key and auth token in the .env file. Default provider is Ollama; switch to Gemini by setting <code>AGENT_ADK_PROVIDER=gemini</code>.</p>
+              <code>AGENT_TOKEN=your-secret-token<br>AGENT_ADK_PROVIDER=gemini<br>AGENT_ADK_MODEL=gemini-2.0-flash<br>GOOGLE_AI_API_KEY=your-gemini-key</code>
             </div>
           </div>
           <div class="gs-step reveal reveal-delay-2">
@@ -3228,7 +4265,7 @@ result = response.json()
     <div class="container">
       <div class="cta-content reveal">
         <h2>Ready to automate?</h2>
-        <p>Deploy Griphook in minutes. Free, open source, and completely self-hosted.</p>
+        <p>Deploy Griphook in minutes on macOS, Linux, or Windows. Free, open source, and completely self-hosted. Back up the whole Control Center in one click from <code>Settings → Database</code>.</p>
         <div class="cta-buttons">
           <a href="#getting-started" class="btn btn-primary">
             Install
@@ -3520,7 +4557,7 @@ result = response.json()
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Profile tracking (interests, personality, style)
+              Per-profile tracking (interests, personality, style) stored on the agent
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -3528,7 +4565,7 @@ result = response.json()
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Remembers last 20 messages per profile
+              Export your wingman data anytime via <code>GET /agent/wingman/export</code>
             </li>
           </ul>
         </div>
@@ -3610,18 +4647,19 @@ result = response.json()
 
         <div class="modal-section">
           <h3>Configuration</h3>
+          <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">No credentials to copy-paste — open the skill in the app and click <strong>Authorize</strong> to start the OAuth flow.</p>
           <div class="modal-config">
             <div class="modal-config-item">
-              <span class="label">OAuth Client ID<span class="required">*</span></span>
-              <span class="value">From Google Cloud Console</span>
+              <span class="label">Setup</span>
+              <span class="value">One-click OAuth in <code>Settings → Skills → Gmail API</code></span>
             </div>
             <div class="modal-config-item">
-              <span class="label">OAuth Client Secret<span class="required">*</span></span>
-              <span class="value">From Google Cloud Console</span>
+              <span class="label">Token Storage</span>
+              <span class="value">Agent H2 (<code>gmail_tokens</code> table) — revocable from the UI</span>
             </div>
             <div class="modal-config-item">
-              <span class="label">Authorization</span>
-              <span class="value">One-time OAuth flow in app</span>
+              <span class="label">Scopes</span>
+              <span class="value">gmail.readonly, gmail.send, gmail.compose</span>
             </div>
           </div>
         </div>
@@ -3657,15 +4695,11 @@ result = response.json()
           <ul>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Command Skills</strong> — Run predefined shell commands
+              <strong>Command Skills</strong> — Run predefined shell commands with <code>commands</code>, <code>workingDir</code>, <code>timeout</code>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Prompt Skills</strong> — Custom AI personas and instructions
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Workflow Skills</strong> — Multi-step with conditions and branching
+              <strong>Prompt Skills</strong> — Reusable AI prompt templates you can load into chat context
             </li>
           </ul>
         </div>
@@ -3675,15 +4709,11 @@ result = response.json()
           <div class="modal-config">
             <div class="modal-config-item">
               <span class="label">Create command skill</span>
-              <span class="value">"Create a skill 'deploy-prod' that runs: git pull && docker-compose up -d"</span>
+              <span class="value">"Create a skill 'deploy-prod' that runs: git pull && docker compose up -d"</span>
             </div>
             <div class="modal-config-item">
               <span class="label">Create prompt skill</span>
               <span class="value">"Create a skill that acts as a security-focused code reviewer"</span>
-            </div>
-            <div class="modal-config-item">
-              <span class="label">Create workflow</span>
-              <span class="value">"Create a skill that checks health, deploys if OK, alerts Slack if not"</span>
             </div>
             <div class="modal-config-item">
               <span class="label">Run a skill</span>
@@ -3697,23 +4727,19 @@ result = response.json()
           <ul>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Create skills through natural language
+              Create skills through natural language in chat, or directly via <code>POST /agent/custom-skills</code>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Skills persist across sessions
+              Skills persist across sessions and sync to the Control Center
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Enable/disable skills on demand
+              Enable/disable and hide/show on demand
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Track execution counts
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Workflows can call other skills (Slack, Gmail, etc.)
+              Track execution counts and last-run timestamps
             </li>
           </ul>
         </div>
@@ -3869,6 +4895,62 @@ result = response.json()
       });
     }
 
+    function copyInstallCmd(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Auto-detect user platform and highlight the matching oneliner card
+    (function detectPlatform() {
+      var ua = navigator.userAgent || '';
+      var p = navigator.platform || '';
+      var label, cardId;
+      if (/Win/i.test(ua) || /Win/i.test(p)) {
+        label = 'Windows';
+        cardId = 'onelinerCardWin';
+      } else if (/Mac/i.test(p) || /Macintosh/i.test(ua) || /iPhone|iPad|iPod/i.test(ua)) {
+        label = 'macOS';
+        cardId = 'onelinerCardUnix';
+      } else if (/Linux/i.test(p) || /Linux/i.test(ua) || /X11/i.test(ua)) {
+        label = 'Linux';
+        cardId = 'onelinerCardUnix';
+      } else {
+        label = navigator.platform || 'Unknown';
+        cardId = 'onelinerCardUnix';
+      }
+
+      var labelEl = document.getElementById('detectLabel');
+      if (labelEl) labelEl.textContent = label;
+
+      var card = document.getElementById(cardId);
+      if (card) {
+        // Inject a small "Your platform" highlight ribbon
+        var ribbon = document.createElement('div');
+        ribbon.className = 'oneliner-detect-pill';
+        ribbon.style.background = 'rgba(0, 255, 102, 0.12)';
+        ribbon.style.borderColor = 'rgba(0, 255, 102, 0.4)';
+        ribbon.style.color = 'var(--lime)';
+        ribbon.style.marginLeft = 'auto';
+        ribbon.innerHTML = '<span class="detect-dot" style="background: var(--lime); box-shadow: 0 0 6px var(--lime);"></span>USE THIS ONE';
+        card.style.borderColor = 'rgba(0, 255, 102, 0.5)';
+        card.style.boxShadow = '0 0 20px rgba(0, 255, 102, 0.15)';
+        // Prepend a "Your platform" label inside the card
+        var label = document.createElement('div');
+        label.style.cssText = 'position: absolute; top: -10px; left: 14px; background: var(--bg-primary); padding: 0 8px; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--lime);';
+        label.textContent = '\u2192 ' + (navigator.userAgent.match(/Mac/) ? 'macOS' : (navigator.userAgent.match(/Win/) ? 'Windows' : (navigator.userAgent.match(/Linux|X11/) ? 'Linux' : 'Your platform')));
+        card.style.position = 'relative';
+        card.insertBefore(label, card.firstChild);
+      }
+    })();
+
     // Parallax orbs on mouse move
     document.addEventListener('mousemove', (e) => {
       const orbs = document.querySelectorAll('.orb');
@@ -3900,6 +4982,7 @@ result = response.json()
           { type: 'input', text: '1' },
           { type: 'progress', text: 'Pulling griphook:latest', duration: 2000 },
           { type: 'success', text: '✓ GRIPHOOK installed to /opt/griphook' },
+          { type: 'success', text: '✓ Default AI: Ollama (minimax-m3:cloud)' },
           { type: 'success', text: '✓ Dashboard: http://localhost:3000' },
         ]
       },
@@ -3941,9 +5024,11 @@ result = response.json()
           { type: 'skill', icon: '📧', name: 'Gmail API', status: 'configured' },
           { type: 'skill', icon: '⏰', name: 'Scheduler', status: 'active (3 tasks)' },
           { type: 'skill', icon: '🔧', name: 'Custom Skills', status: '2 skills' },
+          { type: 'skill', icon: '🔍', name: 'Web Search', status: 'searxng + ddgo' },
           { type: 'skill', icon: '💕', name: 'Wingman', status: 'ready to rizz' },
+          { type: 'skill', icon: '🤖', name: 'Custom Skill', status: 'hidden' },
           { type: 'output', text: '' },
-          { type: 'success', text: '✓ 5 skills loaded' },
+          { type: 'success', text: '✓ 10 skills loaded' },
         ]
       },
       {

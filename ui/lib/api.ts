@@ -68,6 +68,22 @@ export async function removeAgent(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to remove agent');
 }
 
+export async function updateAgent(
+  id: string,
+  updates: { name?: string; url?: string; token?: string }
+): Promise<Agent> {
+  const res = await fetch(`/api/agents/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to update agent');
+  }
+  return res.json();
+}
+
 export async function getExecutions(agentId?: string): Promise<Execution[]> {
   const url = agentId ? `/api/executions?agentId=${agentId}` : '/api/executions';
   const res = await fetch(url, { cache: 'no-store' });
@@ -564,4 +580,98 @@ export async function deleteChatSession(
     console.error('Error deleting chat session:', err);
     return { success: false, error: 'Failed to delete session' };
   }
+}
+
+// Wingman export types and functions
+
+export interface WingmanProfile {
+  id: number;
+  name: string;
+  displayName: string;
+  nickname: string;
+  platform: string;
+  relationshipStage: string;
+  interests: string;
+  personality: string;
+  communicationStyle: string;
+  knownFacts: string;
+  recentMessages: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WingmanExport {
+  exportedAt: string;
+  version: string;
+  profileCount: number;
+  profiles: WingmanProfile[];
+}
+
+export async function exportWingmanHistory(agentId: string): Promise<WingmanExport> {
+  const res = await fetch(`/api/agents/${agentId}/wingman/export`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to export wingman history');
+  return res.json();
+}
+
+// AI Provider Config types and functions
+
+export interface AIProviderConfig {
+  provider: string;  // "gemini" or "ollama"
+  geminiModel: string;
+  ollamaBaseUrl: string;
+  ollamaModel: string;
+}
+
+export async function getAIConfig(agentId: string): Promise<AIProviderConfig> {
+  const res = await fetch(`/api/agents/${agentId}/ai-config`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch AI config');
+  return res.json();
+}
+
+export async function updateAIConfig(
+  agentId: string,
+  config: AIProviderConfig
+): Promise<{ success: boolean; config?: AIProviderConfig; message?: string; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/ai-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return res.json();
+}
+
+// Database export / import (UI's local SQLite at ui/data/runner.db)
+
+export interface DatabaseStats {
+  counts: {
+    agents: number;
+    executions: number;
+    steps: number;
+    logLines: number;
+  };
+}
+
+export async function getDatabaseStats(): Promise<DatabaseStats> {
+  const res = await fetch('/api/database/stats', { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch database stats');
+  return res.json();
+}
+
+export function getDatabaseExportUrl(format: 'json' | 'sqlite' = 'json'): string {
+  return `/api/database/export?format=${format}`;
+}
+
+export async function importDatabase(jsonPayload: unknown): Promise<{
+  success: boolean;
+  imported?: { agentsImported: number; executionsImported: number; stepsImported: number; logsImported: number };
+  message?: string;
+  error?: string;
+}> {
+  const res = await fetch('/api/database/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(jsonPayload),
+  });
+  return res.json();
 }

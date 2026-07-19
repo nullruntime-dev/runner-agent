@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function DELETE(
   request: NextRequest,
@@ -13,12 +14,12 @@ export async function DELETE(
   }
 
   try {
-    const response = await fetch(`${agent.url}/agent/skills/${skillName}`, {
+    const response = await proxyToAgent(agent, `/agent/skills/${skillName}`, {
+
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     if (!response.ok) {
       const error = await response.text();

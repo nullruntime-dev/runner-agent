@@ -470,7 +470,8 @@ export default function ChatView({
 
         {/* Empty state */}
         {messages.length === 0 && !streamingContent && !isLoadingHistory && (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <div className="flex flex-col items-center justify-center h-full w-full px-4">
+            <div className="max-w-3xl w-full flex flex-col items-center text-center">
             <div className={`w-20 h-20 flex items-center justify-center mb-6 ${
               selectedSkill === 'flirt'
                 ? 'bg-gradient-to-br from-[#ff00ea]/20 to-[#ff00ea]/5 border border-[#ff00ea]/20'
@@ -522,6 +523,7 @@ export default function ChatView({
                 </button>
               ))}
             </div>
+            </div>
           </div>
         )}
 
@@ -561,17 +563,15 @@ export default function ChatView({
 
         {/* Typing indicator */}
         {isLoading && !streamingContent && (
-          <div className="flex justify-start">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#00fff2] to-[#ff00ea] flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-sm">GH</span>
-              </div>
-              <div className="bg-[#111] border border-[#1a1a1a] px-4 py-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
+          <div className="flex items-center gap-3 max-w-3xl mx-auto px-4">
+            <div className="w-8 h-8 bg-gradient-to-br from-[#00fff2] to-[#ff00ea] flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm">GH</span>
+            </div>
+            <div className="bg-[#111] border border-[#1a1a1a] px-4 py-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-[#00fff2] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>

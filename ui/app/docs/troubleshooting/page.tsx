@@ -1,4 +1,4 @@
-import { CodeBlock, TroubleshootItem } from '../components';
+import { CodeBlock, TroubleshootItem, InfoBox } from '../components';
 
 export default function TroubleshootingPage() {
   return (
@@ -8,189 +8,202 @@ export default function TroubleshootingPage() {
         Common issues and how to resolve them.
       </p>
 
-      <h2 className="text-xl font-bold text-white mb-6">Common Issues</h2>
+      <h2 className="text-xl font-bold text-white mb-6">Common issues</h2>
       <div className="space-y-6">
         <TroubleshootItem
-          problem="Agent shows as OFFLINE in Control Center"
+          problem="Agent shows as OFFLINE in the Control Center"
           solutions={[
             "Verify the agent is running: curl http://agent-host:8090/health",
-            "Check network connectivity between Control Center and agent",
-            "Ensure the agent URL includes http:// prefix",
-            "Check firewall rules allow port 8090"
+            "Check network connectivity between the UI and the agent",
+            "Ensure the agent URL includes the http:// (or https://) prefix",
+            "Check firewall rules allow port 8090 (or whatever SERVER_PORT is set to)",
           ]}
         />
 
         <TroubleshootItem
-          problem="401 Unauthorized when connecting to agent"
+          problem="401 Unauthorized when fetching skills / sessions / schedules / custom-skills"
           solutions={[
-            "Verify the token in Control Center matches AGENT_TOKEN on the agent",
-            "Check the token doesn't have extra whitespace",
-            "Restart the agent after changing AGENT_TOKEN"
+            "Open Manage Agents → Edit the agent → paste the correct AGENT_TOKEN → Save.",
+            "If the backend is on the default AGENT_TOKEN=1234, the UI auto-falls back to '1234' when the stored token is empty — make sure the backend is actually using that default, not a custom token.",
+            "Check the token has no extra whitespace.",
+            "Restart the agent after changing AGENT_TOKEN.",
           ]}
         />
 
         <TroubleshootItem
-          problem="Database locked errors (SQLite)"
+          problem="AI chat / Ollama save returns 401"
           solutions={[
-            "Ensure only one instance of Control Center is running",
-            "Check for zombie processes: ps aux | grep node",
-            "Delete lock file: rm data/runner.db-journal"
+            "Same as above: the stored agent token doesn't match AGENT_TOKEN on the agent.",
+            "Edit the agent in Manage Agents and set the correct token.",
           ]}
         />
 
         <TroubleshootItem
-          problem="Execution stuck in RUNNING status"
+          problem="SQLite database locked (ui/data/runner.db)"
           solutions={[
-            "Use the cancel endpoint: POST /execution/{id}/cancel",
-            "Check agent logs: journalctl -u griphook-agent",
-            "Restart the agent to clean up stuck processes"
+            "Ensure only one instance of the Next.js UI is running.",
+            "Check for zombie node processes: ps aux | grep node",
+            "Remove stale journal file: rm ui/data/runner.db-journal",
+            "Compact: sqlite3 ui/data/runner.db 'VACUUM;'",
           ]}
         />
 
         <TroubleshootItem
-          problem="Logs not streaming in real-time"
+          problem="Execution stuck in RUNNING"
           solutions={[
-            "Check proxy timeouts (nginx/apache)",
-            "Add to nginx: proxy_buffering off;",
-            "Increase timeout: proxy_read_timeout 3600s;"
+            "Cancel via UI, or POST /execution/{id}/cancel to the agent.",
+            "Inspect agent logs: journalctl -u griphook-agent -f",
+            "Restart the agent to clean up zombie processes (the active Process is held in a ConcurrentHashMap).",
           ]}
         />
 
         <TroubleshootItem
-          problem="Java not found or wrong version"
+          problem="SSE logs not streaming in the browser"
           solutions={[
-            "Install Java 21+: apt install openjdk-21-jre-headless",
+            "Check the agent URL is reachable and the token is correct.",
+            "If behind nginx: set proxy_buffering off; proxy_read_timeout 3600s; and proxy_cache off;",
+            "Check the browser dev tools Network tab — the EventSource request must stay open with text/event-stream content type.",
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="Java not found / wrong version"
+          solutions={[
+            "Install Java 21+: apt install openjdk-21-jre-headless (or dnf / pacman / brew).",
             "Check version: java -version",
-            "Set JAVA_HOME if needed"
+            "Set JAVA_HOME if needed.",
           ]}
         />
 
         <TroubleshootItem
-          problem="Agent fails to start - token not set"
+          problem="Prisma client errors after editing schema"
           solutions={[
-            "Set AGENT_TOKEN environment variable",
-            "For systemd: add Environment=AGENT_TOKEN=xxx in service file",
-            "For Docker: add -e AGENT_TOKEN=xxx"
-          ]}
-        />
-
-        <TroubleshootItem
-          problem="Control Center can't connect to database"
-          solutions={[
-            "Check data directory exists: mkdir -p data",
-            "Check permissions: chown -R user:user data",
-            "Run migrations: npx prisma migrate deploy"
+            "Run npx prisma generate inside ui/.",
+            "Then npm run build.",
+            "Never run npx prisma migrate dev against the Docker DB — the entrypoint applies the SQL directly.",
           ]}
         />
 
         <TroubleshootItem
           problem="Slack slash command not working"
           solutions={[
-            "Verify the command name in Slack matches the Slash Command config in Skills",
-            "Check agent logs for 'No SlashCommandHandler registered for command'",
-            "Ensure Socket Mode is enabled in your Slack App settings",
-            "Reinstall the Slack app after adding slash commands",
-            "Restart the agent after changing Slack configuration"
+            "Verify the command name in Slack matches the Slash Command field in the skill config.",
+            "Check agent logs for 'No SlashCommandHandler registered for command'.",
+            "Ensure Socket Mode is enabled in your Slack App settings and the App-Level Token starts with xapp-.",
+            "Reinstall the Slack app after adding slash commands.",
+            "Restart the agent after changing Slack configuration.",
           ]}
         />
 
         <TroubleshootItem
           problem="Slack responses stuck at 'Processing...'"
           solutions={[
-            "Check agent logs for errors in command processing",
-            "Verify the bot token has chat:write permission",
-            "Ensure the default channel is accessible by the bot",
-            "Check if the AI model (Gemini) API key is valid"
+            "Check agent logs for command processing errors.",
+            "Verify the bot token has chat:write permission.",
+            "Ensure the default channel is accessible by the bot.",
+            "Check the AI provider (Gemini / Ollama) is reachable and the API key is valid.",
           ]}
         />
 
         <TroubleshootItem
-          problem="AI Chat not responding"
+          problem="AI chat not responding"
           solutions={[
-            "Verify agent.adk.enabled=true in application.yml",
-            "Check GOOGLE_API_KEY or Gemini credentials are set",
-            "Look for ADK errors in agent logs",
-            "Ensure the agent is online (check health endpoint)"
+            "Settings → AI Configuration — pick a provider and model, then Apply.",
+            "For Gemini: verify GOOGLE_AI_API_KEY is set on the agent.",
+            "For Ollama: check OLLAMA_BASE_URL is reachable and the model supports tool calling (ollama show MODEL | grep tools).",
+            "Inspect agent logs for ADK errors.",
           ]}
         />
 
         <TroubleshootItem
-          problem="Gmail/SMTP emails not sending"
+          problem="Gmail / SMTP emails not sending"
           solutions={[
-            "For Gmail: Generate an App Password (not your regular password)",
-            "Check SMTP port matches encryption (587 for TLS, 465 for SSL)",
-            "Verify sender email is allowed to send from SMTP server",
-            "Check agent logs for javax.mail errors"
+            "For Gmail SMTP: use an App Password, not your account password (myaccount.google.com/apppasswords).",
+            "Match port to encryption: 587 TLS, 465 SSL, 25 plain.",
+            "Check agent logs for javax.mail errors.",
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="Web Search returns no results"
+          solutions={[
+            "SearXNG: ensure SEARXNG_BASE_URL points to a running instance (default http://localhost:8081).",
+            "DuckDuckGo: works out of the box, but the html endpoint can rate-limit under heavy use.",
+            "Wolfram Alpha: requires an appId configured in the skill.",
+          ]}
+        />
+
+        <TroubleshootItem
+          problem="Settings wizard won't go away on /docs or /settings"
+          solutions={[
+            "These two paths are excluded from the setup check by design (see SetupCheck.tsx).",
+            "If /agents or other pages also re-trigger the wizard, your ../settings.json has setupComplete=false; set it to true manually or use Settings → Reset Setup → Run Setup Wizard.",
           ]}
         />
       </div>
 
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Useful Commands</h2>
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Useful commands</h2>
       <CodeBlock language="bash">
-{`# Check agent health
+{`# Agent health
 curl -s http://localhost:8090/health | jq
 
 # List recent executions
 curl -s -H "Authorization: Bearer $TOKEN" \\
   http://localhost:8090/executions?limit=10 | jq
 
+# Stream SSE logs
+curl -N -H "Authorization: Bearer $TOKEN" \\
+  http://localhost:8090/execution/{id}/logs
+
+# Test AI chat
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"message": "list executions"}' http://localhost:8090/agent/chat
+
 # View agent logs
 journalctl -u griphook-agent -f
 
 # View Control Center logs
-journalctl -u runner-control-center -f
+journalctl -u griphook-ui -f
 
-# Check database size
-du -h data/runner.db
-du -h agent-data.mv.db
+# UI database stats
+sqlite3 ui/data/runner.db "SELECT 'agents', COUNT(*) FROM Agent
+  UNION ALL SELECT 'executions', COUNT(*) FROM Execution
+  UNION ALL SELECT 'steps',     COUNT(*) FROM Step
+  UNION ALL SELECT 'logLines',  COUNT(*) FROM LogLine;"
 
-# Compact SQLite (reclaim space)
-sqlite3 data/runner.db "VACUUM;"
+# Compact the UI database
+sqlite3 ui/data/runner.db "VACUUM;"
 
-# Check what's using a port
-lsof -i :8090
-lsof -i :3000
+# Check port usage
+lsof -i :8090   # agent
+lsof -i :3000   # UI
 
-# Test SSE connection
-curl -N -H "Authorization: Bearer $TOKEN" \\
-  http://localhost:8090/execution/{id}/logs
-
-# Test AI Chat endpoint
-curl -X POST -H "Authorization: Bearer $TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"message": "list executions"}' \\
-  http://localhost:8090/agent/chat
-
-# Check Slack connection status
-# Look for "Slack Socket Mode started successfully" in logs
-journalctl -u griphook-agent | grep -i slack`}
+# Confirm Slack is up
+journalctl -u griphook-agent | grep -i "slack"`}
       </CodeBlock>
 
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Debug Mode</h2>
-      <p className="text-[#888] mb-4">
-        Enable verbose logging for debugging:
-      </p>
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Debug mode</h2>
       <CodeBlock language="bash">
-{`# Agent - enable debug logging
-AGENT_TOKEN=xxx java -jar griphook-agent.jar \\
+{`# Agent: enable DEBUG logging for your package
+java -jar runner-agent-0.1.0-SNAPSHOT.jar \\
   --logging.level.dev.runner.agent=DEBUG
 
-# Control Center - enable verbose output
+# UI: verbose Next.js output
 DEBUG=* npm run dev`}
       </CodeBlock>
 
-      <h2 className="text-xl font-bold text-white mt-12 mb-4">Reset Database</h2>
-      <p className="text-[#888] mb-4">
-        If you need to start fresh (warning: deletes all data):
-      </p>
+      <h2 className="text-xl font-bold text-white mt-12 mb-4">Reset database</h2>
+      <InfoBox type="warning" title="Deletes all data — irreversible">
+        Back up first (see the Backup page).
+      </InfoBox>
       <CodeBlock language="bash">
 {`# Control Center
-rm data/runner.db
-npx prisma migrate deploy
+rm -f ui/data/runner.db ui/data/runner.db-journal ui/data/runner.db-shm ui/data/runner.db-wal
+# Restart the UI; the schema is recreated on first request
 
 # Agent
-rm agent-data.mv.db agent-data.trace.db
-# Database will be recreated on next start`}
+rm -f agent-data.mv.db agent-data.trace.db
+# Schema is recreated on next agent start (ddl-auto: update)`}
       </CodeBlock>
     </div>
   );

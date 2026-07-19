@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function DELETE(
   request: NextRequest,
@@ -13,12 +14,12 @@ export async function DELETE(
   }
 
   try {
-    const response = await fetch(`${agent.url}/agent/gmail/auth`, {
+    const response = await proxyToAgent(agent, `/agent/gmail/auth`, {
+
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     if (!response.ok) {
       return NextResponse.json(

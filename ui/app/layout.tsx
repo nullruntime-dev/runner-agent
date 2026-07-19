@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import SetupCheck from '@/components/SetupCheck';
+import GlobalNav from '@/components/GlobalNav';
 
 export const metadata: Metadata = {
   title: 'GRIPHOOK',
@@ -14,8 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <SetupCheck>{children}</SetupCheck>
+      <body className="antialiased min-h-screen bg-[#050505]">
+        <SetupCheck>
+          <GlobalNav />
+          {children}
+        </SetupCheck>
       </body>
     </html>
   );

@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SetupWizard from '@/components/SetupWizard';
 import SkillsManagement from '@/components/SkillsManagement';
+import DatabaseManagement from '@/components/DatabaseManagement';
+import { getAgents, getAIConfig, updateAIConfig, AIProviderConfig } from '@/lib/api';
 
 interface EnvConfig {
   googleAiApiKey: string;
   agentToken: string;
-  agentAdkModel: string;
   agentAdkEnabled: boolean;
   serverPort: string;
   agentWorkingDir: string;
@@ -22,15 +23,23 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<EnvConfig>({
     googleAiApiKey: '',
     agentToken: '',
-    agentAdkModel: 'gemini-2.0-flash',
     agentAdkEnabled: true,
     serverPort: '8090',
     agentWorkingDir: '/tmp',
     agentDefaultShell: '/bin/bash',
     agentMaxConcurrent: '5',
   });
+  // AI config from backend (dynamic, no restart needed)
+  const [aiConfig, setAiConfig] = useState<AIProviderConfig>({
+    provider: 'gemini',
+    geminiModel: 'gemini-2.0-flash',
+    ollamaBaseUrl: 'http://127.0.0.1:11434',
+    ollamaModel: 'llama3.1:8b',
+  });
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAiConfig, setSavingAiConfig] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showToken, setShowToken] = useState(false);
@@ -39,10 +48,24 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
+        // Load env config
         const res = await fetch('/api/settings');
         if (res.ok) {
           const data = await res.json();
           setConfig(data);
+        }
+
+        // Load AI config from backend via first agent
+        const agents = await getAgents();
+        if (agents.length > 0) {
+          const firstAgent = agents[0];
+          setAgentId(firstAgent.id);
+          try {
+            const aiCfg = await getAIConfig(firstAgent.id);
+            setAiConfig(aiCfg);
+          } catch {
+            // Agent may not support AI config endpoint yet
+          }
         }
       } catch {
         // Ignore fetch errors
@@ -62,6 +85,28 @@ export default function SettingsPage() {
     } catch {
       // Ignore fetch errors
     }
+  };
+
+  const handleSaveAiConfig = async () => {
+    if (!agentId) {
+      setMessage({ type: 'error', text: 'No agent configured. Add an agent first.' });
+      return;
+    }
+    setSavingAiConfig(true);
+    setMessage(null);
+
+    try {
+      const result = await updateAIConfig(agentId, aiConfig);
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message || 'AI configuration updated. Changes take effect immediately.' });
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to save AI configuration' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to communicate with agent' });
+    }
+
+    setSavingAiConfig(false);
   };
 
   const handleSave = async () => {
@@ -110,24 +155,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      {/* Header */}
-      <header className="border-b border-[#1a1a1a] bg-[#0a0a0a]/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="w-8 h-8 bg-[#111] border border-[#333] flex items-center justify-center">
-                <span className="text-[#00fff2] font-bold text-sm">G</span>
-              </div>
-              <span className="text-white font-semibold">GRIPHOOK</span>
-            </Link>
-            <span className="text-neutral-600">/</span>
-            <span className="text-neutral-400">Settings</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
+    <div>
       <main className="max-w-4xl mx-auto px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white mb-2">Settings</h1>
@@ -140,10 +168,10 @@ export default function SettingsPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p className="text-sm text-[#00fff2] font-medium">Environment Configuration</p>
+            <p className="text-sm text-[#00fff2] font-medium">Configuration Types</p>
             <p className="text-xs text-neutral-400 mt-1">
-              These settings are saved to the <code className="text-[#00fff2] bg-black/50 px-1 py-0.5">.env</code> file.
-              You will need to <strong className="text-white">restart the backend service</strong> for changes to take effect.
+              <span className="text-[#00ff66]">AI Configuration</span> changes apply immediately.
+              Other settings are saved to <code className="text-[#00fff2] bg-black/50 px-1 py-0.5">.env</code> and require <strong className="text-white">backend restart</strong>.
             </p>
           </div>
         </div>
@@ -160,7 +188,7 @@ export default function SettingsPage() {
         )}
 
         <div className="space-y-8">
-          {/* AI Configuration */}
+          {/* AI Configuration (Dynamic - No Restart Needed) */}
           <section className="border border-[#1a1a1a] bg-[#0f0f0f]">
             <div className="px-6 py-4 border-b border-[#1a1a1a]">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -168,8 +196,162 @@ export default function SettingsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
                 AI Configuration
+                <span className="text-[10px] px-1.5 py-0.5 bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30 ml-2">
+                  LIVE
+                </span>
               </h2>
-              <p className="text-sm text-neutral-500 mt-1">Configure Google Gemini AI for chat capabilities</p>
+              <p className="text-sm text-neutral-500 mt-1">Configure AI provider and model for chat capabilities. Changes take effect immediately.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {!agentId && (
+                <div className="p-3 bg-[#ff6600]/10 border border-[#ff6600]/30 text-sm text-[#ff6600]">
+                  No agent configured. Add an agent first to configure AI settings.
+                </div>
+              )}
+
+              {agentId && (
+                <>
+                  {/* AI Provider */}
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      AI Provider
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setAiConfig({ ...aiConfig, provider: 'gemini' })}
+                        className={`flex-1 px-4 py-3 border transition-colors ${
+                          aiConfig.provider === 'gemini'
+                            ? 'border-[#00fff2] bg-[#00fff2]/10 text-[#00fff2]'
+                            : 'border-[#333] text-neutral-400 hover:border-neutral-500'
+                        }`}
+                      >
+                        <div className="font-medium">Google Gemini</div>
+                        <div className="text-xs opacity-70 mt-1">Cloud-based, requires API key</div>
+                      </button>
+                      <button
+                        onClick={() => setAiConfig({ ...aiConfig, provider: 'ollama' })}
+                        className={`flex-1 px-4 py-3 border transition-colors ${
+                          aiConfig.provider === 'ollama'
+                            ? 'border-[#00fff2] bg-[#00fff2]/10 text-[#00fff2]'
+                            : 'border-[#333] text-neutral-400 hover:border-neutral-500'
+                        }`}
+                      >
+                        <div className="font-medium">Ollama</div>
+                        <div className="text-xs opacity-70 mt-1">Local models, runs on your machine</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Gemini Configuration */}
+                  {aiConfig.provider === 'gemini' && (
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-300 mb-2">
+                        Gemini Model
+                      </label>
+                      <select
+                        value={aiConfig.geminiModel}
+                        onChange={(e) => setAiConfig({ ...aiConfig, geminiModel: e.target.value })}
+                        className="w-full bg-[#111] border border-[#333] px-4 py-2.5 text-white focus:border-[#00fff2] focus:outline-none transition-colors"
+                      >
+                        <option value="gemini-2.0-flash">gemini-2.0-flash (Recommended)</option>
+                        <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Ollama Configuration */}
+                  {aiConfig.provider === 'ollama' && (
+                    <>
+                      {/* Ollama Base URL */}
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                          Ollama Server URL
+                        </label>
+                        <input
+                          type="text"
+                          value={aiConfig.ollamaBaseUrl}
+                          onChange={(e) => setAiConfig({ ...aiConfig, ollamaBaseUrl: e.target.value })}
+                          placeholder="http://127.0.0.1:11434"
+                          className="w-full bg-[#111] border border-[#333] px-4 py-2.5 text-white placeholder-neutral-600 focus:border-[#00fff2] focus:outline-none transition-colors font-mono text-sm"
+                        />
+                        <p className="text-xs text-neutral-500 mt-2">
+                          Default: http://127.0.0.1:11434. Make sure Ollama is running with <code className="text-[#00fff2]">ollama serve</code>
+                        </p>
+                      </div>
+
+                      {/* Ollama Model */}
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-300 mb-2">
+                          Ollama Model
+                        </label>
+                        <input
+                          type="text"
+                          value={aiConfig.ollamaModel}
+                          onChange={(e) => setAiConfig({ ...aiConfig, ollamaModel: e.target.value })}
+                          placeholder="llama3.1:8b"
+                          className="w-full bg-[#111] border border-[#333] px-4 py-2.5 text-white placeholder-neutral-600 focus:border-[#00fff2] focus:outline-none transition-colors font-mono"
+                        />
+                        <p className="text-xs text-neutral-500 mt-2">
+                          Models with tool support: <span className="text-neutral-400">llama3.1, mistral, qwen3, mixtral</span>.
+                          Pull with <code className="text-[#00fff2]">ollama pull MODEL</code>
+                        </p>
+                      </div>
+
+                      {/* Ollama Info Banner */}
+                      <div className="p-3 bg-[#ff6600]/10 border border-[#ff6600]/30 text-sm">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-[#ff6600] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <div className="text-[#ff6600]">
+                            <strong>Tool support required:</strong> Use models that support function calling.
+                            Check with <code className="bg-black/30 px-1">ollama show MODEL</code> — look for &quot;tools&quot; in capabilities.
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Save AI Config Button */}
+                  <div className="pt-4 border-t border-[#1a1a1a]">
+                    <button
+                      onClick={handleSaveAiConfig}
+                      disabled={savingAiConfig}
+                      className="px-4 py-2 bg-[#00fff2] text-black font-medium hover:bg-[#00fff2]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {savingAiConfig ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Applying...
+                        </>
+                      ) : (
+                        'Apply AI Configuration'
+                      )}
+                    </button>
+                    <p className="text-xs text-neutral-500 mt-2">
+                      Changes apply immediately to the next chat request. No restart required.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* API Key (requires restart) */}
+          <section className="border border-[#1a1a1a] bg-[#0f0f0f]">
+            <div className="px-6 py-4 border-b border-[#1a1a1a]">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-[#00fff2]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                API Keys
+              </h2>
+              <p className="text-sm text-neutral-500 mt-1">Manage API keys. Requires backend restart to take effect.</p>
             </div>
             <div className="p-6 space-y-4">
               {/* Google AI API Key */}
@@ -212,29 +394,13 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* AI Model */}
-              <div>
-                <label className="block text-sm font-medium text-neutral-300 mb-2">
-                  AI Model
-                </label>
-                <select
-                  value={config.agentAdkModel}
-                  onChange={(e) => setConfig({ ...config, agentAdkModel: e.target.value })}
-                  className="w-full bg-[#111] border border-[#333] px-4 py-2.5 text-white focus:border-[#00fff2] focus:outline-none transition-colors"
-                >
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Recommended)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                </select>
-              </div>
-
               {/* AI Enabled */}
               <div className="flex items-center justify-between">
                 <div>
                   <label className="block text-sm font-medium text-neutral-300">
                     Enable AI Chat
                   </label>
-                  <p className="text-xs text-neutral-500">Turn AI chat capabilities on or off</p>
+                  <p className="text-xs text-neutral-500">Turn AI chat capabilities on or off (requires restart)</p>
                 </div>
                 <button
                   onClick={() => setConfig({ ...config, agentAdkEnabled: !config.agentAdkEnabled })}
@@ -379,6 +545,22 @@ export default function SettingsPage() {
             </div>
             <div className="p-6">
               <SkillsManagement />
+            </div>
+          </section>
+
+          {/* Database Management */}
+          <section className="border border-[#1a1a1a] bg-[#0f0f0f]">
+            <div className="px-6 py-4 border-b border-[#1a1a1a]">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-[#aa00ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                </svg>
+                Database
+              </h2>
+              <p className="text-sm text-neutral-500 mt-1">Export or restore the UI&apos;s local database (registered agents, executions, steps, log lines)</p>
+            </div>
+            <div className="p-6">
+              <DatabaseManagement />
             </div>
           </section>
 

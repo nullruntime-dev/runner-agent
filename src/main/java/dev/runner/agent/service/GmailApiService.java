@@ -15,6 +15,7 @@
  */
 package dev.runner.agent.service;
 
+
 import com.google.api.client.auth.oauth2.TokenResponseException;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest;
@@ -39,7 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.mail.MessagingException;
 import javax.mail.Session;
 import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -404,7 +407,18 @@ public class GmailApiService {
             }
         }
         email.setSubject(subject);
-        email.setText(body, "UTF-8");
+
+        // Multipart/alternative: HTML for clients that render it, plain text as fallback.
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText(EmailRenderer.renderPlainText(body), "UTF-8");
+
+        MimeBodyPart htmlPart = new MimeBodyPart();
+        htmlPart.setContent(EmailRenderer.renderHtml(body), "text/html; charset=UTF-8");
+
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        alternative.addBodyPart(textPart);
+        alternative.addBodyPart(htmlPart);
+        email.setContent(alternative);
 
         // Add headers that help with spam filtering
         email.setSentDate(new java.util.Date());
@@ -426,7 +440,17 @@ public class GmailApiService {
         email.setReplyTo(new InternetAddress[] { new InternetAddress(fromEmail) });
         email.addRecipient(javax.mail.Message.RecipientType.TO, new InternetAddress(to));
         email.setSubject(subject);
-        email.setText(body, "UTF-8");
+
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText(EmailRenderer.renderPlainText(body), "UTF-8");
+
+        MimeBodyPart htmlPart = new MimeBodyPart();
+        htmlPart.setContent(EmailRenderer.renderHtml(body), "text/html; charset=UTF-8");
+
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        alternative.addBodyPart(textPart);
+        alternative.addBodyPart(htmlPart);
+        email.setContent(alternative);
 
         // Add headers that help with spam filtering
         email.setSentDate(new java.util.Date());
