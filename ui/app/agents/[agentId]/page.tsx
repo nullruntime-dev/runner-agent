@@ -79,17 +79,6 @@ export default async function AgentDetailPage({ params }: PageProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            {isOnline && (
-              <Link
-                href={`/agents/${agentId}/chat`}
-                className="h-7 px-3 bg-gradient-to-r from-[#00fff2] to-[#00cccc] hover:from-[#00cccc] hover:to-[#00fff2] text-black text-xs font-medium transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(0,255,242,0.3)]"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                AI CHAT
-              </Link>
-            )}
             <DeleteAgentButton agentId={agentId} agentName={agent.name} />
           </div>
         </div>

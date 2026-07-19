@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function POST(
   request: NextRequest,
@@ -15,14 +16,14 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const response = await fetch(`${agent.url}/agent/chat`, {
+    const response = await proxyToAgent(agent, `/agent/chat`, {
+
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
-    });
+    })
 
     if (!response.ok) {
       const error = await response.text();

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import ChatView from './ChatView';
 import AgentSkills from './AgentSkills';
+import ChatSessionsSidebar from './ChatSessionsSidebar';
 
 interface Agent {
   id: string;
@@ -15,28 +16,31 @@ interface ChatPageClientProps {
   agents: Agent[];
 }
 
+type SidebarTab = 'history' | 'skills';
+
 export default function ChatPageClient({ agents }: ChatPageClientProps) {
   const [selectedAgentId, setSelectedAgentId] = useState<string>(agents[0]?.id || '');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<SidebarTab>('history');
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
+
+  const handleSelectSession = useCallback((sessionId: string | null) => {
+    setCurrentSessionId(sessionId);
+  }, []);
+
+  const handleNewChat = useCallback(() => {
+    setCurrentSessionId(null);
+  }, []);
+
+  const handleSessionChange = useCallback((sessionId: string) => {
+    setCurrentSessionId(sessionId);
+  }, []);
 
   return (
     <div className="flex h-full bg-[#050505]">
       {/* Agent Sidebar */}
       <div className="w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col flex-shrink-0 h-full">
-        {/* Logo/Header */}
-        <div className="px-5 py-4 border-b border-[#1a1a1a]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#111] border border-[#2a2a2a] flex items-center justify-center">
-              <span className="text-lg font-bold text-[#00fff2]">G</span>
-            </div>
-            <div>
-              <h1 className="text-sm font-semibold text-white">GRIPHOOK</h1>
-              <p className="text-[10px] text-[#444]">AI-Powered Chat</p>
-            </div>
-          </div>
-        </div>
-
         {/* Agents Section */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-2 mb-3">
@@ -77,19 +81,50 @@ export default function ChatPageClient({ agents }: ChatPageClientProps) {
           </div>
         </div>
 
-        {/* Skills Section */}
+        {/* History / Skills Toggle */}
         {selectedAgentId && (
           <div className="flex-1 flex flex-col min-h-0 border-t border-[#1a1a1a] mt-2">
-            <div className="px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-4 bg-gradient-to-b from-[#ff00ea] to-[#9900ff] " />
-                <h2 className="text-[11px] font-semibold text-[#888] uppercase tracking-wider">
+            <div className="px-3 py-3 border-b border-[#1a1a1a] flex-shrink-0">
+              <div className="flex bg-[#111] border border-[#1f1f1f] p-0.5">
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`flex-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                    activeTab === 'history'
+                      ? 'bg-[#1a1a1a] text-[#00fff2] shadow-[0_0_10px_rgba(0,255,242,0.15)]'
+                      : 'text-[#666] hover:text-[#aaa]'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  History
+                </button>
+                <button
+                  onClick={() => setActiveTab('skills')}
+                  className={`flex-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                    activeTab === 'skills'
+                      ? 'bg-[#1a1a1a] text-[#ff00ea] shadow-[0_0_10px_rgba(255,0,234,0.15)]'
+                      : 'text-[#666] hover:text-[#aaa]'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                   Skills
-                </h2>
+                </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-2">
-              <AgentSkills agentId={selectedAgentId} isOnline={true} />
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {activeTab === 'history' ? (
+                <ChatSessionsSidebar
+                  agentId={selectedAgentId}
+                  currentSessionId={currentSessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewChat={handleNewChat}
+                />
+              ) : (
+                <AgentSkills agentId={selectedAgentId} isOnline={true} />
+              )}
             </div>
           </div>
         )}
@@ -132,7 +167,12 @@ export default function ChatPageClient({ agents }: ChatPageClientProps) {
             </div>
             {/* Chat View */}
             <div className="flex-1 overflow-hidden">
-              <ChatView key={selectedAgentId} agentId={selectedAgentId} />
+              <ChatView
+                key={selectedAgentId}
+                agentId={selectedAgentId}
+                sessionId={currentSessionId}
+                onSessionChange={handleSessionChange}
+              />
             </div>
           </>
         ) : (

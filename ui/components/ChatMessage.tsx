@@ -107,7 +107,7 @@ export default function ChatMessage({ message, isStreaming }: ChatMessageProps) 
   // openwebui layout: full-width row, avatar + name on top, content fills width.
   return (
     <div className="group py-3">
-      <div className="flex items-start gap-3 max-w-3xl mx-auto">
+      <div className="flex items-start gap-3 max-w-3xl mx-auto px-4">
         {/* Avatar */}
         <div
           className={`w-7 h-7 flex-shrink-0 flex items-center justify-center text-xs font-bold ${

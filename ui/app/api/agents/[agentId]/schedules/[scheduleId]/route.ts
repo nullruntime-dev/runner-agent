@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,12 +14,12 @@ export async function GET(
   }
 
   try {
-    const res = await fetch(`${agent.url}/agent/schedules/${scheduleId}`, {
+    const res = await proxyToAgent(agent, `/agent/schedules/${scheduleId}`, {
+
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
       cache: 'no-store',
-    });
+    })
 
     if (!res.ok) {
       return NextResponse.json({ error: 'Schedule not found' }, { status: res.status });
@@ -46,14 +47,14 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    const res = await fetch(`${agent.url}/agent/schedules/${scheduleId}`, {
+    const res = await proxyToAgent(agent, `/agent/schedules/${scheduleId}`, {
+
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
-    });
+    })
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
@@ -75,12 +76,12 @@ export async function DELETE(
   }
 
   try {
-    const res = await fetch(`${agent.url}/agent/schedules/${scheduleId}`, {
+    const res = await proxyToAgent(agent, `/agent/schedules/${scheduleId}`, {
+
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

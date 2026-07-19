@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -16,11 +17,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '50';
 
-    const response = await fetch(`${agent.url}/agent/sessions?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-      },
-    });
+    const response = await proxyToAgent(agent, `/agent/sessions?limit=${limit}`);
 
     if (!response.ok) {
       return NextResponse.json(

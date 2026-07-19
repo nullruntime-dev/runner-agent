@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,8 +14,7 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(`${agent.url}/execution/${executionId}`, {
-      headers: { Authorization: `Bearer ${agent.token}` },
+    const response = await proxyToAgent(agent, `/execution/${executionId}`, {
       cache: 'no-store',
     });
 

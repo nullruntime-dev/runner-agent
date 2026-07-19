@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,11 +14,11 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(`${agent.url}/agent/custom-skills/${name}`, {
+    const response = await proxyToAgent(agent, `/agent/custom-skills/${name}`, {
+
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     if (!response.ok) {
       return NextResponse.json(
@@ -51,14 +52,14 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    const response = await fetch(`${agent.url}/agent/custom-skills/${name}`, {
+    const response = await proxyToAgent(agent, `/agent/custom-skills/${name}`, {
+
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
-    });
+    })
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
@@ -83,12 +84,12 @@ export async function DELETE(
   }
 
   try {
-    const response = await fetch(`${agent.url}/agent/custom-skills/${name}`, {
+    const response = await proxyToAgent(agent, `/agent/custom-skills/${name}`, {
+
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });

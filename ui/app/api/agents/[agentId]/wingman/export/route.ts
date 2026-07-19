@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,11 +14,11 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(`${agent.url}/wingman/export`, {
+    const response = await proxyToAgent(agent, `/wingman/export`, {
+
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     if (!response.ok) {
       return NextResponse.json(

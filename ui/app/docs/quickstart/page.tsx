@@ -1,89 +1,124 @@
-import { CodeBlock } from '../components';
+import Link from 'next/link';
+import { CodeBlock, InfoBox } from '../components';
 
 export default function QuickStartPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold text-white mb-4">Quick Start</h1>
       <p className="text-[#888] mb-8">
-        Get GRIPHOOK up and running in minutes. Choose between Docker Compose (recommended) or building from source.
+        Get GRIPHOOK up and running in a few minutes. You can run the whole stack with Docker
+        Compose, or build the agent JAR and the Next.js UI separately for development.
       </p>
 
+      <InfoBox type="tip" title="What you need">
+        Java 21+ for the agent, Node.js 22+ for the UI, Docker (optional but recommended).
+        Default ports: agent <code className="text-[#00fff2]">8090</code>, UI <code className="text-[#00fff2]">3000</code>.
+      </InfoBox>
+
       {/* Option 1: Docker Compose */}
-      <div className="bg-[#0f0f0f] border border-[#2a2a2a] p-6 mb-8">
-        <h2 className="text-xl font-bold text-white mb-4">Option 1: Docker Compose (Recommended)</h2>
+      <div className="bg-[#0f0f0f] border border-[#2a2a2a] p-6 mb-8 mt-8">
+        <h2 className="text-xl font-bold text-white mb-4">Option 1: Docker Compose (recommended)</h2>
         <p className="text-[#888] mb-4">
-          The fastest way to get started. Runs both the backend agent and the UI.
+          Brings up both the agent and the UI in one command. Use <code className="text-[#00fff2]">docker-compose.local.yml</code> to build from source, or <code className="text-[#00fff2]">docker-compose.prod.yml</code> to pull pre-built images.
         </p>
         <CodeBlock language="bash">
-{`# Clone the repository
+{`# Clone
 git clone https://github.com/nullruntime-dev/runner-agent.git
 cd runner-agent
 
-# Configure environment
+# Configure
 cp .env.example .env
-# Edit .env and set AGENT_TOKEN and GOOGLE_AI_API_KEY
+# Edit .env and set at minimum:
+#   AGENT_TOKEN=<a-strong-random-token>
+#   GOOGLE_AI_API_KEY=<your-key>     # only if you want Gemini
+# If you leave AGENT_TOKEN unset the default is "1234" (dev only).
 
-# Start with Docker Compose (local development with build)
-docker compose -f docker-compose.local.yml up -d
+# Start (build from source, local dev)
+docker compose -f docker-compose.local.yml up --build -d
 
-# Or use pre-built images (production)
+# OR start pre-built images (production)
 docker compose -f docker-compose.prod.yml up -d
 
-# View logs
-docker compose -f docker-compose.local.yml logs -f`}
+# Watch logs
+docker compose -f docker-compose.local.yml logs -f
+
+# Stop
+docker compose -f docker-compose.local.yml down`}
         </CodeBlock>
         <p className="text-[#666] text-sm mt-4">
-          Backend runs on <code className="text-[#00fff2]">http://localhost:8090</code>, UI on <code className="text-[#00fff2]">http://localhost:3000</code>
+          Agent: <a href="http://localhost:8090" className="text-[#00fff2] hover:underline">http://localhost:8090</a> &middot; UI: <a href="http://localhost:3000" className="text-[#00fff2] hover:underline">http://localhost:3000</a>
         </p>
       </div>
 
-      {/* Option 2: JAR File */}
+      {/* Option 2: Local dev (two terminals) */}
       <div className="bg-[#0f0f0f] border border-[#2a2a2a] p-6 mb-8">
-        <h2 className="text-xl font-bold text-white mb-4">Option 2: Build from Source (JAR)</h2>
+        <h2 className="text-xl font-bold text-white mb-4">Option 2: Local development (two terminals)</h2>
         <p className="text-[#888] mb-4">
-          Build and run the backend JAR directly. Requires Java 21+.
+          Best when you&apos;re editing code. Backend with Gradle, UI with <code>next dev</code>.
         </p>
+
+        <h3 className="text-md font-medium text-[#ccc] mb-3">Terminal 1 — Agent</h3>
         <CodeBlock language="bash">
-{`# Clone and build
-git clone https://github.com/nullruntime-dev/runner-agent.git
-cd runner-agent
-./gradlew bootJar
-
-# Run the JAR (requires GOOGLE_AI_API_KEY for AI chat)
-AGENT_TOKEN=your-secret-token \\
-GOOGLE_AI_API_KEY=your-google-ai-key \\
-java -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar
-
-# Or run directly with Gradle
+{`# From the repo root
+SERVER_PORT=8090 \\
 AGENT_TOKEN=your-secret-token \\
 GOOGLE_AI_API_KEY=your-google-ai-key \\
 ./gradlew bootRun`}
         </CodeBlock>
 
-        <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Start the UI (separate terminal)</h3>
+        <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Terminal 2 — UI</h3>
         <CodeBlock language="bash">
 {`cd ui
 npm install
-npm run dev`}
+npx prisma generate     # required before first run / after schema changes
+npm run dev             # http://localhost:3000`}
+        </CodeBlock>
+        <p className="text-[#666] text-sm mt-4">
+          Run two agents on the same machine by giving them different ports:
+        </p>
+        <CodeBlock language="bash">
+{`# In a 3rd terminal, run a second agent on 8091
+SERVER_PORT=8091 AGENT_TOKEN=token-two ./gradlew bootRun`}
         </CodeBlock>
       </div>
 
-      {/* Verify Installation */}
-      <h2 className="text-xl font-bold text-white mb-4">Verify Installation</h2>
+      {/* First-time setup wizard */}
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">First-time setup wizard</h2>
       <p className="text-[#888] mb-4">
-        Check that the agent is running:
+        Open the UI at <a href="http://localhost:3000" className="text-[#00fff2] hover:underline">http://localhost:3000</a>. The setup wizard walks you through:
       </p>
+      <ol className="list-decimal list-inside text-[#888] space-y-2 mb-6">
+        <li>Setting a Google AI API key (optional — only needed for Gemini)</li>
+        <li>Generating an agent token</li>
+        <li>Registering your first agent by URL and token</li>
+      </ol>
+      <p className="text-[#888] mb-4">
+        The wizard writes to <code className="text-[#00fff2]">../settings.json</code> at the repo root. You can re-run it from <strong>Settings → Setup Wizard</strong> at any time.
+      </p>
+
+      {/* Verify */}
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">Verify the agent</h2>
       <CodeBlock language="bash">
 {`curl http://localhost:8090/health
-
-# Expected response:
-# {"status":"ok","version":"0.1.0"}`}
+# {"status":"ok","version":"0.1.0-SNAPSHOT"}`}
       </CodeBlock>
 
-      {/* Execute First Command */}
-      <h2 className="text-xl font-bold text-white mb-4 mt-10">Execute Your First Command</h2>
+      {/* Register in the UI */}
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">Register the agent in the UI</h2>
+      <ol className="list-decimal list-inside text-[#888] space-y-2 mb-6">
+        <li>Open the UI, complete the setup wizard (or skip it via <code>Settings</code>)</li>
+        <li>Go to <Link href="/agents" className="text-[#00fff2] hover:underline">Manage Agents</Link></li>
+        <li>Fill in <strong>Name</strong>, <strong>Agent URL</strong> (e.g. <code>http://localhost:8090</code>), and the <strong>API Token</strong> you set above</li>
+        <li>Click <strong>Add Agent</strong></li>
+      </ol>
       <p className="text-[#888] mb-4">
-        Submit an execution via the API:
+        The dashboard auto-syncs execution history on load. You can also click <strong>Refresh</strong> in the top bar, or use <code>POST /api/sync</code> to force a sync.
+      </p>
+
+      {/* Execute First Command */}
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">Submit your first execution</h2>
+      <p className="text-[#888] mb-4">
+        Either from the UI (per-agent → New Execution) or directly via the API:
       </p>
       <CodeBlock language="bash">
 {`curl -X POST http://localhost:8090/execute \\
@@ -97,70 +132,33 @@ npm run dev`}
     ]
   }'`}
       </CodeBlock>
+      <p className="text-[#888] text-sm mt-2">
+        The response includes an <code>id</code> — visit <code>/executions/&#123;id&#125;</code> in the UI (or your agent) to see live logs.
+      </p>
 
       {/* AI Chat */}
-      <h2 className="text-xl font-bold text-white mb-4 mt-10">Try AI Chat</h2>
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">Try AI chat</h2>
       <p className="text-[#888] mb-4">
-        Open the UI at <code className="text-[#00fff2]">http://localhost:3000</code> and click <code className="text-[#ff6600]">AI CHAT</code> in the header.
+        Click <strong>AI CHAT</strong> in the top bar. Example prompts:
       </p>
-      <p className="text-[#888] mb-4">Example prompts:</p>
       <ul className="list-disc list-inside text-[#888] space-y-2 mb-6">
-        <li>&quot;Run echo hello world&quot;</li>
         <li>&quot;List recent executions&quot;</li>
+        <li>&quot;Run <code>echo hello world</code>&quot;</li>
         <li>&quot;What&apos;s the status of the last deployment?&quot;</li>
-        <li>&quot;Send a Slack message saying deployment complete&quot; (requires Slack skill)</li>
+        <li>&quot;Send a Slack message saying deployment complete&quot; (requires Slack skill configured)</li>
+        <li>&quot;Help me reply to Sarah who said she loves hiking&quot; (Wingman mode)</li>
       </ul>
-
-      {/* Environment Variables */}
-      <h2 className="text-xl font-bold text-white mb-4 mt-10">Environment Variables</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#1a1a1a]">
-              <th className="text-left py-3 px-4 text-[#888]">Variable</th>
-              <th className="text-left py-3 px-4 text-[#888]">Required</th>
-              <th className="text-left py-3 px-4 text-[#888]">Default</th>
-              <th className="text-left py-3 px-4 text-[#888]">Description</th>
-            </tr>
-          </thead>
-          <tbody className="text-[#ccc]">
-            <tr className="border-b border-[#1a1a1a]">
-              <td className="py-3 px-4"><code className="text-[#00fff2]">AGENT_TOKEN</code></td>
-              <td className="py-3 px-4">No</td>
-              <td className="py-3 px-4"><code>1234</code></td>
-              <td className="py-3 px-4">API authentication token</td>
-            </tr>
-            <tr className="border-b border-[#1a1a1a]">
-              <td className="py-3 px-4"><code className="text-[#00fff2]">GOOGLE_AI_API_KEY</code></td>
-              <td className="py-3 px-4">Yes (for AI)</td>
-              <td className="py-3 px-4">—</td>
-              <td className="py-3 px-4">Google AI API key for Gemini</td>
-            </tr>
-            <tr className="border-b border-[#1a1a1a]">
-              <td className="py-3 px-4"><code className="text-[#00fff2]">SERVER_PORT</code></td>
-              <td className="py-3 px-4">No</td>
-              <td className="py-3 px-4"><code>8090</code></td>
-              <td className="py-3 px-4">Backend server port</td>
-            </tr>
-            <tr className="border-b border-[#1a1a1a]">
-              <td className="py-3 px-4"><code className="text-[#00fff2]">AGENT_ADK_MODEL</code></td>
-              <td className="py-3 px-4">No</td>
-              <td className="py-3 px-4"><code>gemini-2.0-flash</code></td>
-              <td className="py-3 px-4">Gemini model ID</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p className="text-[#666] text-sm mt-4">
-        See <code className="text-[#888]">.env.example</code> for all available options including Slack, Gmail, and SMTP configuration.
+      <p className="text-[#888] mb-4">
+        Provider and model are configured in <strong>Settings → AI Configuration</strong>. Changes apply on the next request, no restart.
       </p>
 
-      {/* Next Steps */}
-      <h2 className="text-xl font-bold text-white mb-4 mt-10">Next Steps</h2>
+      {/* Next steps */}
+      <h2 className="text-xl font-bold text-white mb-4 mt-10">Next steps</h2>
       <ul className="list-disc list-inside text-[#888] space-y-2 mb-6">
-        <li>Configure skills (Slack, Gmail, SMTP) from the <a href="/docs/configuration" className="text-[#00fff2] hover:underline">Configuration</a> page</li>
-        <li>Set up production deployment with <a href="/docs/deployment" className="text-[#00fff2] hover:underline">systemd or Docker</a></li>
-        <li>Explore the <a href="/docs/api" className="text-[#00fff2] hover:underline">API reference</a></li>
+        <li>Set up skills (Slack, Gmail, web search) — <Link href="/docs/configuration" className="text-[#00fff2] hover:underline">Configuration</Link></li>
+        <li>Deploy to production — <Link href="/docs/deployment" className="text-[#00fff2] hover:underline">Deployment</Link></li>
+        <li>Wire CI/CD to the execution API — <Link href="/docs/api" className="text-[#00fff2] hover:underline">API Reference</Link></li>
+        <li>Back up the database — <Link href="/docs/backup" className="text-[#00fff2] hover:underline">Backup &amp; Database</Link></li>
       </ul>
     </div>
   );

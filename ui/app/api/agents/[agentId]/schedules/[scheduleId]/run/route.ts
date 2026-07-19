@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function POST(
   request: NextRequest,
@@ -13,12 +14,12 @@ export async function POST(
   }
 
   try {
-    const res = await fetch(`${agent.url}/agent/schedules/${scheduleId}/run`, {
+    const res = await proxyToAgent(agent, `/agent/schedules/${scheduleId}/run`, {
+
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${agent.token}`,
       },
-    });
+    })
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });

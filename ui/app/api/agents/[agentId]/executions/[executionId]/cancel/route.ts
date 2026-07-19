@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function POST(
   request: NextRequest,
@@ -13,9 +14,8 @@ export async function POST(
   }
 
   try {
-    const response = await fetch(`${agent.url}/execution/${executionId}/cancel`, {
+    const response = await proxyToAgent(agent, `/execution/${executionId}/cancel`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${agent.token}` },
     });
 
     if (!response.ok) {

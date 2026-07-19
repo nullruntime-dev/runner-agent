@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgent } from '@/lib/agents';
+import { proxyToAgent } from '@/lib/proxy';
 
 export async function GET(
   request: NextRequest,
@@ -13,11 +14,7 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(`${agent.url}/agent/custom-skills`, {
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-      },
-    });
+    const response = await proxyToAgent(agent, '/agent/custom-skills');
 
     if (!response.ok) {
       return NextResponse.json(
@@ -51,12 +48,9 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const response = await fetch(`${agent.url}/agent/custom-skills`, {
+    const response = await proxyToAgent(agent, '/agent/custom-skills', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${agent.token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 

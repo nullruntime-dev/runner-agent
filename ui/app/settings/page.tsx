@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SetupWizard from '@/components/SetupWizard';
 import SkillsManagement from '@/components/SkillsManagement';
+import DatabaseManagement from '@/components/DatabaseManagement';
 import { getAgents, getAIConfig, updateAIConfig, AIProviderConfig } from '@/lib/api';
 
 interface EnvConfig {
@@ -544,6 +545,22 @@ export default function SettingsPage() {
             </div>
             <div className="p-6">
               <SkillsManagement />
+            </div>
+          </section>
+
+          {/* Database Management */}
+          <section className="border border-[#1a1a1a] bg-[#0f0f0f]">
+            <div className="px-6 py-4 border-b border-[#1a1a1a]">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-[#aa00ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                </svg>
+                Database
+              </h2>
+              <p className="text-sm text-neutral-500 mt-1">Export or restore the UI&apos;s local database (registered agents, executions, steps, log lines)</p>
+            </div>
+            <div className="p-6">
+              <DatabaseManagement />
             </div>
           </section>
 

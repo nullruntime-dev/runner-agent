@@ -9,7 +9,7 @@ const navItems = [
   { href: '/docs/api', label: 'API Reference' },
   { href: '/docs/configuration', label: 'Configuration' },
   { href: '/docs/security', label: 'Security' },
-  { href: '/docs/backup', label: 'Backup' },
+  { href: '/docs/backup', label: 'Backup & Database' },
   { href: '/docs/deployment', label: 'Deployment' },
   { href: '/docs/migration', label: 'Migration' },
   { href: '/docs/troubleshooting', label: 'Troubleshooting' },

@@ -68,6 +68,22 @@ export async function removeAgent(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to remove agent');
 }
 
+export async function updateAgent(
+  id: string,
+  updates: { name?: string; url?: string; token?: string }
+): Promise<Agent> {
+  const res = await fetch(`/api/agents/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to update agent');
+  }
+  return res.json();
+}
+
 export async function getExecutions(agentId?: string): Promise<Execution[]> {
   const url = agentId ? `/api/executions?agentId=${agentId}` : '/api/executions';
   const res = await fetch(url, { cache: 'no-store' });
@@ -621,6 +637,41 @@ export async function updateAIConfig(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
+  });
+  return res.json();
+}
+
+// Database export / import (UI's local SQLite at ui/data/runner.db)
+
+export interface DatabaseStats {
+  counts: {
+    agents: number;
+    executions: number;
+    steps: number;
+    logLines: number;
+  };
+}
+
+export async function getDatabaseStats(): Promise<DatabaseStats> {
+  const res = await fetch('/api/database/stats', { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch database stats');
+  return res.json();
+}
+
+export function getDatabaseExportUrl(format: 'json' | 'sqlite' = 'json'): string {
+  return `/api/database/export?format=${format}`;
+}
+
+export async function importDatabase(jsonPayload: unknown): Promise<{
+  success: boolean;
+  imported?: { agentsImported: number; executionsImported: number; stepsImported: number; logsImported: number };
+  message?: string;
+  error?: string;
+}> {
+  const res = await fetch('/api/database/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(jsonPayload),
   });
   return res.json();
 }
