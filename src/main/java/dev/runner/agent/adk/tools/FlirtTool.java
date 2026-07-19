@@ -52,6 +52,10 @@ public class FlirtTool {
     }
 
     private String getSessionId() {
+        return getCurrentSession();
+    }
+
+    public static String getCurrentSession() {
         String session = currentSessionId.get();
         return session != null ? session : "default";
     }

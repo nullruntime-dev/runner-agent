@@ -103,11 +103,28 @@ public class SkillService {
             SkillDefinition.builder()
                     .name("web-search")
                     .displayName("Web Search")
-                    .description("Search the web using Google Custom Search API to find information, documentation, news, and more")
+                    .description("Search the web using a SearXNG instance to find information, documentation, news, and more")
                     .icon("search")
                     .configFields(List.of(
-                            ConfigField.builder().name("apiKey").label("Google API Key").type("password").description("Google Cloud API Key with Custom Search API enabled").required(true).placeholder("AIza...").build(),
-                            ConfigField.builder().name("searchEngineId").label("Search Engine ID").type("text").description("Custom Search Engine ID (cx parameter) from Programmable Search Engine").required(true).placeholder("a1b2c3d4e5f6g7h8i").build()
+                            ConfigField.builder().name("baseUrl").label("SearXNG URL").type("text").description("Base URL of your SearXNG instance").required(true).placeholder("http://localhost:8080").build()
+                    ))
+                    .build(),
+            SkillDefinition.builder()
+                    .name("duckduckgo")
+                    .displayName("DuckDuckGo")
+                    .description("Search the web using DuckDuckGo to find information, documentation, news, and more")
+                    .icon("search")
+                    .configFields(List.of(
+                            ConfigField.builder().name("baseUrl").label("DuckDuckGo URL").type("text").description("Base URL of DuckDuckGo").required(true).placeholder("https://duckduckgo.com").build(),
+                            ConfigField.builder().name("html").label("DuckDuckGo HTML URL").type("text").description("HTML version URL of DuckDuckGo").required(true).placeholder("https://html.duckduckgo.com/html").build()
+                    ))
+                    .build(),
+            SkillDefinition.builder().name("wolfram-alpha")
+                    .displayName("Wolfram Alpha")
+                    .description("Query Wolfram Alpha for computational knowledge, math, science, and more")
+                    .icon("wolfram-alpha")
+                    .configFields(List.of(
+                            ConfigField.builder().name("appId").label("Wolfram Alpha App ID").type("text").description("Your Wolfram Alpha App ID").required(true).placeholder("YOUR_APP_ID").build()
                     ))
                     .build()
     );
@@ -241,7 +258,8 @@ public class SkillService {
                 .filter(SkillConfig::isEnabled)
                 .map(config -> {
                     try {
-                        return objectMapper.readValue(config.getConfigJson(), new TypeReference<Map<String, String>>() {});
+                        return objectMapper.readValue(config.getConfigJson(), new TypeReference<Map<String, String>>() {
+                        });
                     } catch (JsonProcessingException e) {
                         log.error("Failed to parse skill config for {}", skillName, e);
                         return null;

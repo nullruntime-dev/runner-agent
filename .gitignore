@@ -100,3 +100,4 @@ ui/downloads/*.jar
 !ui/downloads/.gitkeep
 *.jar
 CLAUDE.md
+ui-next

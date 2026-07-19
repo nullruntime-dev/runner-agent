@@ -34,10 +34,13 @@ public class ScheduledTaskService {
 
     private final ScheduledTaskRepository repository;
     private final ScheduledTaskExecutor executor;
+    private final ScheduledTaskAsyncExecutor asyncExecutor;
 
-    public ScheduledTaskService(ScheduledTaskRepository repository, ScheduledTaskExecutor executor) {
+    public ScheduledTaskService(ScheduledTaskRepository repository, ScheduledTaskExecutor executor,
+                                 ScheduledTaskAsyncExecutor asyncExecutor) {
         this.repository = repository;
         this.executor = executor;
+        this.asyncExecutor = asyncExecutor;
         log.info("ScheduledTaskService initialized");
     }
 
@@ -228,38 +231,21 @@ public class ScheduledTaskService {
     }
 
     /**
-     * Run a task immediately (manual trigger)
+     * Run a task immediately (manual trigger) — returns immediately, executes in background.
      */
-    @Transactional
     public String runTaskNow(Long id) {
         ScheduledTask task = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
 
-        try {
-            log.info("Manually executing task: {}", task.getName());
-            String result = executor.execute(task);
-
-            task.setLastRunAt(LocalDateTime.now());
-            task.setLastRunStatus("SUCCESS");
-            task.setLastRunResult(truncate(result, 2000));
-            task.setRunCount(task.getRunCount() + 1);
-
-            repository.save(task);
-
-            return result;
-        } catch (Exception e) {
-            log.error("Manual task execution failed: {}", e.getMessage(), e);
-
-            task.setLastRunAt(LocalDateTime.now());
-            task.setLastRunStatus("FAILED");
-            task.setLastRunResult(truncate("Error: " + e.getMessage(), 2000));
-            task.setRunCount(task.getRunCount() + 1);
-            task.setFailureCount(task.getFailureCount() + 1);
-
-            repository.save(task);
-
-            throw new RuntimeException("Task execution failed: " + e.getMessage(), e);
+        if ("RUNNING".equals(task.getLastRunStatus()) && task.getLastRunAt() != null
+                && task.getLastRunAt().isAfter(LocalDateTime.now().minusMinutes(10))) {
+            throw new IllegalStateException("Task is already running");
         }
+
+        log.info("Manually triggering task: {} (async)", task.getName());
+        asyncExecutor.executeTaskAsync(id);
+
+        return "Task '" + task.getName() + "' triggered. Check status for results.";
     }
 
     /**

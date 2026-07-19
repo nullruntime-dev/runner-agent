@@ -31,6 +31,11 @@ REQUIRED_NODE_VERSION=22
 # Installation method (set by menu or CLI arg)
 INSTALL_METHOD=""
 
+# Agent-only mode: install just the backend, no UI. Set by --agent-only.
+# Use this when you already have a GRIPHOOK UI instance and want to add
+# another agent to it (one UI can manage many agents).
+AGENT_ONLY=0
+
 print_banner() {
     echo -e "${CYAN}"
     echo "  ╔═══════════════════════════════════════════╗"
@@ -275,10 +280,21 @@ install_docker_method() {
     $SUDO curl -fsSL -o docker-compose.yml \
         "https://raw.githubusercontent.com/${GITHUB_REPO}/main/docker-compose.prod.yml"
 
+    # Fix known typo in downloaded compose file (${\AG aaENT_MAX_CONCURRENT...})
+    $SUDO sed -i 's/\${AG aaENT_MAX_CONCURRENT:-5}/${AGENT_MAX_CONCURRENT:-5}/g' docker-compose.yml 2>/dev/null || true
+
     # Create .env file
     if [ ! -f ".env" ]; then
         log_info "Creating default configuration..."
-        $SUDO tee .env > /dev/null << 'EOF'
+
+        # Pick a free port for the default (8090, bumped by +100 if in use).
+        local default_port
+        default_port=$(find_free_port 8090)
+        if [ "$default_port" != "8090" ]; then
+            log_warn "Default port 8090 is in use, using ${default_port} instead."
+        fi
+
+        $SUDO tee .env > /dev/null << EOF
 # GRIPHOOK Configuration
 # Generate a secure token: openssl rand -hex 32
 AGENT_TOKEN=change-me-to-secure-token
@@ -286,6 +302,9 @@ AGENT_TOKEN=change-me-to-secure-token
 # Google AI API Key (required for AI chat)
 # Get one at: https://aistudio.google.com/apikey
 GOOGLE_AI_API_KEY=
+
+# Server settings
+SERVER_PORT=${default_port}
 
 # AI Model
 AGENT_ADK_MODEL=gemini-2.0-flash
@@ -302,6 +321,50 @@ EOF
     configure_env_interactive
 
     log_success "Docker installation complete"
+}
+
+# Find a free port starting from $1, incrementing by 100 if busy (cap at 65535).
+# Echos the free port. Falls back to the original if something goes wrong.
+find_free_port() {
+    local start_port="$1"
+    local port="${start_port:-8090}"
+    local cap=65535
+    local tried=""
+
+    # Pick a port-check command that exists on this OS.
+    #   - Linux:  `ss -ltn` (iproute2) preferred, /proc/net/tcp fallback
+    #   - macOS:  `lsof -nP -iTCP:` (netstat -an is less reliable for listen sockets)
+    #   - Windows (Git Bash / MSYS2): `netstat -an` (no ss, no /proc, lsof may be absent)
+    local port_busy
+    if [ "$OS" = "macos" ] || ! command -v ss &> /dev/null; then
+        if command -v lsof &> /dev/null; then
+            port_busy() {
+                lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | grep -q .
+            }
+        else
+            # Last-resort fallback: netstat -an (works on macOS, Windows Git Bash, Linux)
+            port_busy() {
+                netstat -an 2>/dev/null | grep -E "(^|\\.|:)$1\\s" | grep -qi 'LISTEN'
+            }
+        fi
+    else
+        port_busy() {
+            ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "(^|:)$1$"
+        }
+    fi
+
+    while [ "$port" -le "$cap" ]; do
+        if ! port_busy "$port"; then
+            echo "$port"
+            return 0
+        fi
+        tried="${tried:+$tried, }$port"
+        port=$((port + 100))
+    done
+
+    # Exhausted the range — return the original as a last resort.
+    log_warn "Could not find a free port (tried: ${tried:-none}). Using ${start_port}."
+    echo "${start_port:-8090}"
 }
 
 # Get installed Java major version (handles OpenJDK, Oracle, Temurin, GraalVM, EA builds)
@@ -606,8 +669,12 @@ EOF
     # Create service with svcify
     create_service_with_svcify
 
-    # Install frontend
-    install_frontend
+    # Install frontend (skipped in agent-only mode)
+    if [ "$AGENT_ONLY" -eq 1 ]; then
+        log_warn "Skipping frontend install (--agent-only): agent-only mode"
+    else
+        install_frontend
+    fi
 
     # Interactive configuration
     configure_env_interactive
@@ -674,8 +741,12 @@ EOF
     # Create service with svcify
     create_service_with_svcify
 
-    # Install frontend
-    install_frontend
+    # Install frontend (skipped in agent-only mode)
+    if [ "$AGENT_ONLY" -eq 1 ]; then
+        log_warn "Skipping frontend install (--agent-only): agent-only mode"
+    else
+        install_frontend
+    fi
 
     # Interactive configuration
     configure_env_interactive
@@ -687,7 +758,15 @@ EOF
 create_env_file() {
     if [ ! -f "${INSTALL_DIR}/.env" ]; then
         log_info "Creating default configuration..."
-        $SUDO tee "${INSTALL_DIR}/.env" > /dev/null << 'EOF'
+
+        # Pick a free port for the default (8090, bumped by +100 if in use).
+        local default_port
+        default_port=$(find_free_port 8090)
+        if [ "$default_port" != "8090" ]; then
+            log_warn "Default port 8090 is in use, using ${default_port} instead."
+        fi
+
+        $SUDO tee "${INSTALL_DIR}/.env" > /dev/null << EOF
 # GRIPHOOK Configuration
 # Generate a secure token: openssl rand -hex 32
 AGENT_TOKEN=change-me-to-secure-token
@@ -697,7 +776,7 @@ AGENT_TOKEN=change-me-to-secure-token
 GOOGLE_AI_API_KEY=
 
 # Server settings
-SERVER_PORT=8090
+SERVER_PORT=${default_port}
 AGENT_WORKING_DIR=/tmp
 AGENT_DEFAULT_SHELL=/bin/bash
 AGENT_MAX_CONCURRENT=5
@@ -766,9 +845,18 @@ configure_env_interactive() {
     echo -e "${BOLD}3. Server Port ${DIM}(Default: 8090)${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
+    echo -e "   ${DIM}If the default is in use, we'll auto-bump by +100 until a free port is found.${NC}"
     echo -n "   Enter Server Port [8090]: "
     read -r server_port < /dev/tty
     server_port=${server_port:-8090}
+
+    # Validate the chosen port is free; if not, auto-bump by +100 until free.
+    local suggested_port
+    suggested_port=$(find_free_port "$server_port")
+    if [ "$suggested_port" != "$server_port" ]; then
+        log_warn "Port ${server_port} is in use. Using ${suggested_port} instead."
+        server_port="$suggested_port"
+    fi
 
     # Update the .env file
     log_info "Updating configuration..."
@@ -893,6 +981,20 @@ print_next_steps() {
     echo -e "${GREEN}════════════════════════════════════════════${NC}"
     echo ""
 
+    if [ "$AGENT_ONLY" -eq 1 ]; then
+        echo -e "  ${CYAN}Mode:${NC} ${YELLOW}Agent only (no UI on this host)${NC}"
+        echo ""
+        echo -e "  ${CYAN}API:${NC}    http://localhost:8090"
+        echo -e "  ${CYAN}Health:${NC} http://localhost:8090/health"
+        echo ""
+        echo -e "  ${CYAN}To manage this agent, add it to an existing GRIPHOOK UI:${NC}"
+        echo -e "     1. Open your UI dashboard (e.g. http://<ui-host>:3000)"
+        echo -e "     2. Go to Agents -> Add Agent"
+        echo -e "     3. Enter this host URL: http://<this-host>:8090"
+        echo -e "     4. Paste the AGENT_TOKEN shown below"
+        echo ""
+    fi
+
     case "$INSTALL_METHOD" in
         docker)
             echo -e "  ${CYAN}1.${NC} Configure your API keys:"
@@ -915,19 +1017,33 @@ print_next_steps() {
             echo -e "  ${CYAN}2.${NC} Start the services:"
             if command -v svcify &> /dev/null; then
                 echo -e "     ${YELLOW}sudo svcify start griphook${NC}       # Backend API"
-                echo -e "     ${YELLOW}sudo svcify start griphook-ui${NC}    # Frontend UI"
-                echo ""
-                echo -e "     ${DIM}Enable auto-start on boot:${NC}"
-                echo -e "     ${YELLOW}sudo svcify enable griphook griphook-ui${NC}"
+                if [ "$AGENT_ONLY" -ne 1 ]; then
+                    echo -e "     ${YELLOW}sudo svcify start griphook-ui${NC}    # Frontend UI"
+                    echo ""
+                    echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                    echo -e "     ${YELLOW}sudo svcify enable griphook griphook-ui${NC}"
+                else
+                    echo ""
+                    echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                    echo -e "     ${YELLOW}sudo svcify enable griphook${NC}"
+                fi
             elif [ -f /etc/systemd/system/griphook.service ]; then
                 echo -e "     ${YELLOW}sudo systemctl start griphook${NC}       # Backend API"
-                echo -e "     ${YELLOW}sudo systemctl start griphook-ui${NC}    # Frontend UI"
-                echo ""
-                echo -e "     ${DIM}Enable auto-start on boot:${NC}"
-                echo -e "     ${YELLOW}sudo systemctl enable griphook griphook-ui${NC}"
+                if [ "$AGENT_ONLY" -ne 1 ]; then
+                    echo -e "     ${YELLOW}sudo systemctl start griphook-ui${NC}    # Frontend UI"
+                    echo ""
+                    echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                    echo -e "     ${YELLOW}sudo systemctl enable griphook griphook-ui${NC}"
+                else
+                    echo ""
+                    echo -e "     ${DIM}Enable auto-start on boot:${NC}"
+                    echo -e "     ${YELLOW}sudo systemctl enable griphook${NC}"
+                fi
             else
                 echo -e "     ${YELLOW}${INSTALL_DIR}/start.sh${NC}       # Backend"
-                echo -e "     ${YELLOW}${INSTALL_DIR}/ui/start.sh${NC}    # Frontend"
+                if [ "$AGENT_ONLY" -ne 1 ]; then
+                    echo -e "     ${YELLOW}${INSTALL_DIR}/ui/start.sh${NC}    # Frontend"
+                fi
             fi
             echo ""
             echo -e "  ${CYAN}3.${NC} Check health:"
@@ -936,17 +1052,23 @@ print_next_steps() {
             echo -e "  ${CYAN}4.${NC} View logs:"
             if command -v svcify &> /dev/null; then
                 echo -e "     ${YELLOW}sudo svcify logs griphook${NC}       # Backend logs"
-                echo -e "     ${YELLOW}sudo svcify logs griphook-ui${NC}    # Frontend logs"
+                if [ "$AGENT_ONLY" -ne 1 ]; then
+                    echo -e "     ${YELLOW}sudo svcify logs griphook-ui${NC}    # Frontend logs"
+                fi
             elif [ -f /etc/systemd/system/griphook.service ]; then
                 echo -e "     ${YELLOW}sudo journalctl -u griphook -f${NC}       # Backend logs"
-                echo -e "     ${YELLOW}sudo journalctl -u griphook-ui -f${NC}    # Frontend logs"
+                if [ "$AGENT_ONLY" -ne 1 ]; then
+                    echo -e "     ${YELLOW}sudo journalctl -u griphook-ui -f${NC}    # Frontend logs"
+                fi
             else
                 echo -e "     (logs output to terminal)"
             fi
             echo ""
-            echo -e "  ${CYAN}5.${NC} Access the dashboard:"
-            echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
-            echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
+            if [ "$AGENT_ONLY" -ne 1 ]; then
+                echo -e "  ${CYAN}5.${NC} Access the dashboard:"
+                echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
+                echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
+            fi
             ;;
         sandbox)
             echo -e "  ${CYAN}1.${NC} Enter the sandbox container:"
@@ -970,6 +1092,31 @@ print_next_steps() {
     echo ""
     echo -e "  ${CYAN}Documentation:${NC} https://github.com/${GITHUB_REPO}"
     echo ""
+
+    # Show the agent token so the user can copy it (read back from .env so it
+    # works even when config was skipped because .env already existed).
+    local env_file="${INSTALL_DIR}/.env"
+    if [ -f "$env_file" ]; then
+        local saved_token
+        saved_token=$(grep -E '^AGENT_TOKEN=' "$env_file" 2>/dev/null | cut -d'=' -f2-)
+        local saved_port
+        saved_port=$(grep -E '^SERVER_PORT=' "$env_file" 2>/dev/null | cut -d'=' -f2-)
+        if [ -n "$saved_token" ]; then
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo -e "${GREEN}             Your Agent Token               ${NC}"
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo ""
+            echo -e "  ${CYAN}AGENT_TOKEN:${NC} ${YELLOW}${saved_token}${NC}"
+            echo ""
+            echo -e "  ${DIM}Save this token. You'll need it to authenticate${NC}"
+            echo -e "  ${DIM}API requests and to connect the CLI/UI to the agent.${NC}"
+            echo ""
+            echo -e "  ${DIM}Example:${NC}"
+            echo -e "  ${YELLOW}curl http://localhost:${saved_port:-8090}/health \\${NC}"
+            echo -e "    ${YELLOW}-H \"Authorization: Bearer ${saved_token}\"${NC}"
+            echo ""
+        fi
+    fi
 }
 
 # Parse command line arguments
@@ -992,17 +1139,24 @@ parse_args() {
                 INSTALL_METHOD="sandbox"
                 shift
                 ;;
+            --agent-only)
+                AGENT_ONLY=1
+                shift
+                ;;
             --help|-h)
                 echo "GRIPHOOK Installer"
                 echo ""
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  --docker    Install via Docker Compose (recommended)"
-                echo "  --jar       Install standalone JAR with svcify service"
-                echo "  --source    Build from source with svcify service"
-                echo "  --sandbox   Run in Ubuntu sandbox container (for testing)"
-                echo "  --help      Show this help message"
+                echo "  --docker      Install via Docker Compose (recommended)"
+                echo "  --jar         Install standalone JAR with svcify service"
+                echo "  --source      Build from source with svcify service"
+                echo "  --sandbox     Run in Ubuntu sandbox container (for testing)"
+                echo "  --agent-only  Install only the backend agent (no UI). Use when"
+                echo "                you already have a UI instance and want to add"
+                echo "                another agent to it."
+                echo "  --help        Show this help message"
                 echo ""
                 echo "Environment variables:"
                 echo "  INSTALL_DIR    Installation directory (default: /opt/griphook)"

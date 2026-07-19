@@ -103,7 +103,7 @@ export async function syncAgentExecutions(agent: Agent): Promise<number> {
 
     return synced;
   } catch (error) {
-    console.error(`Failed to sync executions from ${agent.name}:`, error);
+    console.debug(`Skipping sync for ${agent.name} (unreachable):`, error instanceof Error ? error.message : error);
     return 0;
   }
 }
@@ -175,7 +175,7 @@ export async function syncExecutionDetails(agent: Agent, executionId: string): P
 
     return true;
   } catch (error) {
-    console.error(`Failed to sync execution ${executionId}:`, error);
+    console.debug(`Skipping detail sync for execution ${executionId} (unreachable):`, error instanceof Error ? error.message : error);
     return false;
   }
 }

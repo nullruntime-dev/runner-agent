@@ -19,29 +19,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-[#050505]">
-      {/* Header */}
-      <header className="bg-[#0a0a0a] border-b border-[#1a1a1a] sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#111] border border-[#2a2a2a] flex items-center justify-center">
-                <span className="text-sm font-bold text-[#00fff2]">G</span>
-              </div>
-              <span className="text-sm font-semibold text-white tracking-tight">GRIPHOOK</span>
-            </Link>
-            <div className="h-4 w-px bg-[#2a2a2a]" />
-            <span className="text-xs text-[#888] uppercase tracking-wider">Documentation</span>
-          </div>
-          <Link
-            href="/"
-            className="h-8 px-3 bg-[#111] hover:bg-[#1a1a1a] border border-[#2a2a2a] text-[#888] hover:text-white text-xs font-medium transition-colors"
-          >
-            DASHBOARD
-          </Link>
-        </div>
-      </header>
-
+    <div>
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar */}
         <aside className="w-56 flex-shrink-0 border-r border-[#1a1a1a] min-h-[calc(100vh-3.5rem)] sticky top-14 self-start">

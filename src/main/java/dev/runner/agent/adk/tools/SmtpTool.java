@@ -16,6 +16,7 @@
   package dev.runner.agent.adk.tools;
 
 import com.google.adk.tools.Annotations.Schema;
+import dev.runner.agent.service.EmailRenderer;
 import dev.runner.agent.service.SkillService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -51,13 +52,14 @@ public class SmtpTool {
         ).orElse(false);
     }
 
-    @Schema(name = "smtp_send_email", description = "Send an email via SMTP. Use this to send notifications, reports, or alerts via email. Returns error if SMTP is not configured.")
+    @Schema(name = "smtp_send_email", description = "Send an email via SMTP. Use this to send notifications, reports, or alerts via email. Set html=true to send an HTML-formatted email (Gmail and most clients render this with rich formatting). Returns error if SMTP is not configured.")
     public Map<String, Object> sendEmail(
             @Schema(name = "to", description = "Recipient email address") String to,
             @Schema(name = "subject", description = "Email subject line") String subject,
-            @Schema(name = "body", description = "Email body content (plain text)") String body
+            @Schema(name = "body", description = "Email body content (plain text or HTML when html=true)") String body,
+            @Schema(name = "html", description = "If true, body is sent as HTML (Content-Type: text/html). Default: false (plain text).", optional = true) Boolean html
     ) {
-        log.info("ADK tool: smtp_send_email to={} subject={}", to, subject);
+        log.info("ADK tool: smtp_send_email to={} subject={} html={}", to, subject, html);
 
         Map<String, Object> result = new HashMap<>();
 
@@ -79,7 +81,7 @@ public class SmtpTool {
         }
 
         try {
-            sendEmailViaSmtp(config, recipient, subject, body);
+            sendEmailViaSmtp(config, recipient, subject, body, Boolean.TRUE.equals(html));
             result.put("success", true);
             result.put("message", "Email sent successfully to " + recipient);
             log.info("SMTP email sent successfully to {}", recipient);
@@ -92,7 +94,7 @@ public class SmtpTool {
         return result;
     }
 
-    @Schema(name = "smtp_send_deployment_email", description = "Send a formatted deployment notification email via SMTP. Returns error if SMTP is not configured.")
+    @Schema(name = "smtp_send_deployment_email", description = "Send a formatted deployment notification email via SMTP. Sent as plain text. Returns error if SMTP is not configured.")
     public Map<String, Object> sendDeploymentEmail(
             @Schema(name = "to", description = "Recipient email address") String to,
             @Schema(name = "deployment_name", description = "Name of the deployment") String deploymentName,
@@ -120,10 +122,10 @@ public class SmtpTool {
                 details != null ? details : "No additional details"
         );
 
-        return sendEmail(to, subject, body);
+        return sendEmail(to, subject, body, false);
     }
 
-    private void sendEmailViaSmtp(Map<String, String> config, String to, String subject, String body) throws MessagingException, java.io.UnsupportedEncodingException {
+    private void sendEmailViaSmtp(Map<String, String> config, String to, String subject, String body, boolean html) throws MessagingException, java.io.UnsupportedEncodingException {
         String host = config.get("host");
         String portStr = config.get("port");
         String username = config.get("username");
@@ -173,7 +175,20 @@ public class SmtpTool {
 
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
         message.setSubject(subject);
-        message.setText(body);
+        if (html) {
+            MimeBodyPart textPart = new MimeBodyPart();
+            textPart.setText(EmailRenderer.renderPlainText(body), "UTF-8");
+
+            MimeBodyPart htmlPart = new MimeBodyPart();
+            htmlPart.setContent(EmailRenderer.renderHtml(body), "text/html; charset=UTF-8");
+
+            MimeMultipart alternative = new MimeMultipart("alternative");
+            alternative.addBodyPart(textPart);
+            alternative.addBodyPart(htmlPart);
+            message.setContent(alternative);
+        } else {
+            message.setText(body);
+        }
 
         Transport.send(message);
     }

@@ -13,6 +13,7 @@ import {
   toggleCustomSkill,
   toggleCustomSkillVisibility,
   deleteCustomSkill,
+  exportWingmanHistory,
 } from '@/lib/api';
 import SkillConfigModal from './SkillConfigModal';
 import CustomSkillEditor from './CustomSkillEditor';
@@ -190,6 +191,25 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
     }
   };
 
+  const handleExportWingman = async () => {
+    if (!agentId) return;
+    try {
+      const data = await exportWingmanHistory(agentId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wingman-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export wingman history:', err);
+      alert('Failed to export wingman history');
+    }
+  };
+
   if (noAgent) {
     return (
       <div className="text-center py-8">
@@ -259,6 +279,19 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
 
               {/* Actions */}
               <div className="flex items-center gap-2">
+                {/* Export Button (Wingman only) */}
+                {skill.name === 'flirt' && skill.configured && (
+                  <button
+                    onClick={handleExportWingman}
+                    className="p-2 hover:bg-[#1a1a1a] text-neutral-500 hover:text-[#ff00ea] transition-colors"
+                    title="Export History"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                )}
+
                 {/* Configure Button */}
                 <button
                   onClick={() => setConfigModalSkill(skill)}

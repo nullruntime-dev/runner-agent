@@ -565,3 +565,62 @@ export async function deleteChatSession(
     return { success: false, error: 'Failed to delete session' };
   }
 }
+
+// Wingman export types and functions
+
+export interface WingmanProfile {
+  id: number;
+  name: string;
+  displayName: string;
+  nickname: string;
+  platform: string;
+  relationshipStage: string;
+  interests: string;
+  personality: string;
+  communicationStyle: string;
+  knownFacts: string;
+  recentMessages: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WingmanExport {
+  exportedAt: string;
+  version: string;
+  profileCount: number;
+  profiles: WingmanProfile[];
+}
+
+export async function exportWingmanHistory(agentId: string): Promise<WingmanExport> {
+  const res = await fetch(`/api/agents/${agentId}/wingman/export`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to export wingman history');
+  return res.json();
+}
+
+// AI Provider Config types and functions
+
+export interface AIProviderConfig {
+  provider: string;  // "gemini" or "ollama"
+  geminiModel: string;
+  ollamaBaseUrl: string;
+  ollamaModel: string;
+}
+
+export async function getAIConfig(agentId: string): Promise<AIProviderConfig> {
+  const res = await fetch(`/api/agents/${agentId}/ai-config`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch AI config');
+  return res.json();
+}
+
+export async function updateAIConfig(
+  agentId: string,
+  config: AIProviderConfig
+): Promise<{ success: boolean; config?: AIProviderConfig; message?: string; error?: string }> {
+  const res = await fetch(`/api/agents/${agentId}/ai-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return res.json();
+}

@@ -16,23 +16,9 @@ export default async function AgentsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#050505]">
-      {/* Header */}
-      <header className="bg-[#0a0a0a] border-b border-[#1a1a1a]">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-[#888] hover:text-white transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </Link>
-            <div className="h-4 w-px bg-[#2a2a2a]" />
-            <span className="text-sm font-semibold text-white tracking-tight">MANAGE AGENTS</span>
-          </div>
-        </div>
-      </header>
-
+    <main>
       <div className="max-w-5xl mx-auto px-6 py-8">
+        <h1 className="text-lg font-semibold text-white mb-6">Manage Agents</h1>
         <div className="grid grid-cols-2 gap-8">
           {/* Add Agent Form */}
           <div className="bg-[#0a0a0a] border border-[#1a1a1a]">

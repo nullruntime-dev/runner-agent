@@ -16,6 +16,7 @@
   package dev.runner.agent.adk.tools;
 
 import com.google.adk.tools.Annotations.Schema;
+import dev.runner.agent.service.EmailRenderer;
 import dev.runner.agent.service.SkillService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -153,7 +154,17 @@ public class GmailTool {
         message.setFrom(new InternetAddress(email));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
         message.setSubject(subject);
-        message.setText(body);
+
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText(EmailRenderer.renderPlainText(body), "UTF-8");
+
+        MimeBodyPart htmlPart = new MimeBodyPart();
+        htmlPart.setContent(EmailRenderer.renderHtml(body), "text/html; charset=UTF-8");
+
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        alternative.addBodyPart(textPart);
+        alternative.addBodyPart(htmlPart);
+        message.setContent(alternative);
 
         Transport.send(message);
     }
