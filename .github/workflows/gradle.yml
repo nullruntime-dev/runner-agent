@@ -77,6 +77,23 @@ jobs:
             node_modules/@libsql/client
 
       # ============================================
+      # CLI Executor Build
+      # cli-executor is a standalone Gradle build (own settings.gradle),
+      # not a subproject of the root — run its wrapper from its own dir.
+      # Built here (not in a separate job) so its zip can be attached to
+      # the release in a single `gh release create` call — GitHub immutable
+      # releases reject post-create asset uploads.
+      # ============================================
+      - name: Build cli-executor module
+        working-directory: cli-executor
+        run: ./gradlew clean bootJar --no-daemon
+
+      - name: Create cli-executor zip
+        run: |
+          cd cli-executor/build/libs
+          zip -r ../../../cli-executor.zip *.jar
+
+      # ============================================
       # Upload Artifacts
       # ============================================
       - name: Upload backend artifact
@@ -90,6 +107,12 @@ jobs:
         with:
           name: ui-artifact
           path: runner-agent-ui.zip
+
+      - name: Upload cli-executor artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-executor-artifact
+          path: cli-executor.zip
 
       # ============================================
       # Docker Build & Push
@@ -127,48 +150,8 @@ jobs:
           gh release create build-${{ github.run_number }} \
             runner-agent-backend.zip \
             runner-agent-ui.zip \
+            cli-executor.zip \
             --title "Build #${{ github.run_number }}" \
             --prerelease
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-and-publish-cli-executor:
-    needs: build
-    runs-on: self-hosted
-    permissions:
-      contents: write
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
-
-      # ============================================
-      # CLI Executor Build
-      # cli-executor is a standalone Gradle build (own settings.gradle),
-      # not a subproject of the root — run its wrapper from its own dir.
-      # ============================================
-      - name: Build cli-executor module
-        working-directory: cli-executor
-        run: ./gradlew clean bootJar --no-daemon
-
-      - name: Create cli-executor zip
-        run: |
-          cd cli-executor/build/libs
-          zip -r ../../../cli-executor.zip *.jar
-
-      #- ============================================
-      # Upload to GitHub Release
-      # ============================================
-      - name: Upload cli-executor to GitHub Release
-        run: gh release upload build-${{ github.run_number }} cli-executor.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
