@@ -153,9 +153,12 @@ jobs:
 
       # ============================================
       # CLI Executor Build
+      # cli-executor is a standalone Gradle build (own settings.gradle),
+      # not a subproject of the root — run its wrapper from its own dir.
       # ============================================
       - name: Build cli-executor module
-        run: ./gradlew :cli-executor:clean :cli-executor:jar --no-daemon
+        working-directory: cli-executor
+        run: ./gradlew clean bootJar --no-daemon
 
       - name: Create cli-executor zip
         run: |
