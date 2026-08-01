@@ -11,7 +11,7 @@ export default function APIPage() {
       </p>
 
       <InfoBox type="info" title="Authentication">
-        All endpoints except <code className="text-[#ff6600]">/health</code>, the H2 console, and OAuth callbacks require
+        All endpoints except <code className="text-[#ff6600]">/health</code> and OAuth callbacks require
         a Bearer token. On the agent: <code>Authorization: Bearer &lt;AGENT_TOKEN&gt;</code>. On the UI:
         the token is stored per-agent in <code>ui/data/runner.db</code> and automatically attached to proxied requests.
         For SSE endpoints, the token can also be passed as <code>?token=...</code> since EventSource can&apos;t set headers.
@@ -92,7 +92,7 @@ export default function APIPage() {
       </Endpoint>
 
       <Endpoint method="POST" path="/agent/ai-config" auth={true}>
-        Update AI provider/model. Persists to H2 (<code>skill_configs</code>, key <code>ai-provider</code>). No restart.
+        Update AI provider/model. Persists to PostgreSQL (<code>skill_configs</code> table, key <code>ai-provider</code>). No restart.
         <CodeBlock language="json" className="mt-4">
 {`{
   "provider": "ollama",         // or "gemini"
@@ -304,7 +304,7 @@ export default function APIPage() {
 
       {/* CI/CD */}
       <h2 className="text-xl font-bold text-white mt-12 mb-6">CI/CD examples</h2>
-      <h3 className="text-md font-medium text-[#ccc] mb-3">GitHub Actions</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">GitHub Actions</h3>
       <CodeBlock language="yaml">
 {`- name: Deploy to Production
   run: |
@@ -321,7 +321,7 @@ export default function APIPage() {
       }'`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">GitLab CI</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">GitLab CI</h3>
       <CodeBlock language="yaml">
 {`deploy:
   stage: deploy
@@ -333,7 +333,7 @@ export default function APIPage() {
         -d @deploy/production.json`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Trigger via the UI proxy</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Trigger via the UI proxy</h3>
       <p className="text-[#888] text-sm mb-4">
         The UI exposes <code>POST /api/agents/&#123;id&#125;/executions</code> for triggering executions from the
         browser; the Next.js route handler forwards the request to the agent with the correct Bearer token.

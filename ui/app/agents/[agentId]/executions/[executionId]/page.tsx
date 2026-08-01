@@ -21,7 +21,7 @@ async function getExecution(agentId: string, executionId: string): Promise<Execu
     },
   });
 
-  if (!exec || exec.agentId !== agentId) return null;
+  if (!exec || exec.agentId !== agentId || !exec.agent) return null;
 
   return {
     id: exec.id,

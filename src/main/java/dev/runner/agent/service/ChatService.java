@@ -39,14 +39,34 @@ public class ChatService {
 
     @Transactional
     public ChatSession getOrCreateSession(String sessionId) {
-        return sessionRepository.findByIdAndArchivedAtIsNull(sessionId)
-                .orElseGet(() -> {
-                    log.info("Creating new chat session id={}", sessionId);
-                    ChatSession session = ChatSession.builder()
-                            .id(sessionId)
-                            .build();
-                    return sessionRepository.save(session);
-                });
+        Optional<ChatSession> active = sessionRepository.findByIdAndArchivedAtIsNull(sessionId);
+        if (active.isPresent()) {
+            return active.get();
+        }
+        // No active session. If an archived one exists with the same ID, unarchive it
+        // instead of creating new — otherwise save() would merge over the archived row
+        // and overwrite created_at with null (merge doesn't fire @PrePersist, so the
+        // builder-left-null createdAt hits the NOT NULL constraint).
+        Optional<ChatSession> archived = sessionRepository.findById(sessionId);
+        if (archived.isPresent()) {
+            log.info("Unarchiving chat session id={}", sessionId);
+            ChatSession s = archived.get();
+            s.setArchivedAt(null);
+            s.setUpdatedAt(Instant.now());
+            return sessionRepository.save(s);
+        }
+        // Truly new — set timestamps explicitly. save() still routes through merge
+        // (assigned @Id, isNew()==false), but the row doesn't exist so Hibernate
+        // internally persists and @PrePersist will also fire; setting them here
+        // keeps the entity state sane regardless of which path wins.
+        log.info("Creating new chat session id={}", sessionId);
+        Instant now = Instant.now();
+        ChatSession session = ChatSession.builder()
+                .id(sessionId)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        return sessionRepository.save(session);
     }
 
     @Transactional

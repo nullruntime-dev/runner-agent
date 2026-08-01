@@ -201,8 +201,8 @@ DEBUG=* npm run dev`}
 rm -f ui/data/runner.db ui/data/runner.db-journal ui/data/runner.db-shm ui/data/runner.db-wal
 # Restart the UI; the schema is recreated on first request
 
-# Agent
-rm -f agent-data.mv.db agent-data.trace.db
+# Agent (PostgreSQL)
+docker compose -f docker-compose.postgres.yml down -v
 # Schema is recreated on next agent start (ddl-auto: update)`}
       </CodeBlock>
     </div>

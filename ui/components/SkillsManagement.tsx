@@ -60,6 +60,7 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
   const [noAgent, setNoAgent] = useState(false);
   const [configModalSkill, setConfigModalSkill] = useState<Skill | null>(null);
   const [editingCustomSkill, setEditingCustomSkill] = useState<CustomSkill | null>(null);
+  const [creatingCustomSkill, setCreatingCustomSkill] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const fetchSkills = async (id: string) => {
@@ -186,6 +187,13 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
 
   const handleCustomSkillUpdated = () => {
     setEditingCustomSkill(null);
+    if (agentId) {
+      fetchSkills(agentId);
+    }
+  };
+
+  const handleCustomSkillCreated = () => {
+    setCreatingCustomSkill(false);
     if (agentId) {
       fetchSkills(agentId);
     }
@@ -330,80 +338,95 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
       </div>
 
       {/* Custom Skills */}
-      {customSkills.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-neutral-400 mb-3">Custom Skills</h3>
-          <div className="space-y-2">
-            {customSkills.map((skill) => (
-              <div
-                key={skill.name}
-                className={`flex items-center gap-4 p-4 bg-[#111] border border-[#1a1a1a] ${
-                  skill.hidden ? 'opacity-50' : ''
-                }`}
-              >
-                {/* Icon */}
-                <div className={`w-10 h-10 flex items-center justify-center ${
-                  skill.type === 'COMMAND' ? 'bg-[#00aaff]/10 text-[#00aaff]' :
-                  skill.type === 'PROMPT' ? 'bg-[#aa00ff]/10 text-[#aa00ff]' :
-                  'bg-[#ffaa00]/10 text-[#ffaa00]'
-                }`}>
-                  {skill.type === 'COMMAND' ? (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  ) : skill.type === 'PROMPT' ? (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                </div>
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-neutral-400">Custom Skills</h3>
+          {agentId && (
+            <button
+              onClick={() => setCreatingCustomSkill(true)}
+              className="px-3 py-1.5 bg-[#111] hover:bg-[#1a1a1a] border border-[#1a1a1a] hover:border-[#00fff2]/40 text-xs text-neutral-300 hover:text-[#00fff2] transition-colors flex items-center gap-1.5"
+              title="Create custom skill"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New Skill
+            </button>
+          )}
+        </div>
+        <div className="space-y-2">
+          {customSkills.map((skill) => (
+            <div
+              key={skill.name}
+              className={`flex items-center gap-4 p-4 bg-[#111] border border-[#1a1a1a] ${
+                skill.hidden ? 'opacity-50' : ''
+              }`}
+            >
+              {/* Icon */}
+              <div className={`w-10 h-10 flex items-center justify-center ${
+                skill.type === 'COMMAND' ? 'bg-[#00aaff]/10 text-[#00aaff]' :
+                skill.type === 'PROMPT' ? 'bg-[#aa00ff]/10 text-[#aa00ff]' :
+                'bg-[#ffaa00]/10 text-[#ffaa00]'
+              }`}>
+                {skill.type === 'COMMAND' ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ) : skill.type === 'PROMPT' ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+              </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${skill.hidden ? 'text-neutral-500 line-through' : 'text-white'}`}>
-                      {skill.displayName}
-                    </span>
-                    <span className={`text-[8px] px-1 py-0.5 ${
-                      skill.type === 'COMMAND' ? 'bg-[#00aaff]/10 text-[#00aaff] border border-[#00aaff]/30' :
-                      skill.type === 'PROMPT' ? 'bg-[#aa00ff]/10 text-[#aa00ff] border border-[#aa00ff]/30' :
-                      'bg-[#ffaa00]/10 text-[#ffaa00] border border-[#ffaa00]/30'
-                    }`}>
-                      {skill.type}
-                    </span>
-                    {skill.enabled ? (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30">
-                        ACTIVE
-                      </span>
-                    ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-neutral-800 text-neutral-400 border border-neutral-700">
-                        DISABLED
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-neutral-500 truncate">{skill.description}</p>
-                </div>
-
-                {/* Actions */}
+              {/* Info */}
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  {/* Edit Button (for PROMPT type) */}
-                  {skill.type === 'PROMPT' && (
-                    <button
-                      onClick={() => setEditingCustomSkill(skill)}
-                      className="p-2 hover:bg-[#1a1a1a] text-neutral-500 hover:text-[#aa00ff] transition-colors"
-                      title="Edit Prompt"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
+                  <span className={`text-sm font-medium ${skill.hidden ? 'text-neutral-500 line-through' : 'text-white'}`}>
+                    {skill.displayName}
+                  </span>
+                  <span className={`text-[8px] px-1 py-0.5 ${
+                    skill.type === 'COMMAND' ? 'bg-[#00aaff]/10 text-[#00aaff] border border-[#00aaff]/30' :
+                    skill.type === 'PROMPT' ? 'bg-[#aa00ff]/10 text-[#aa00ff] border border-[#aa00ff]/30' :
+                    'bg-[#ffaa00]/10 text-[#ffaa00] border border-[#ffaa00]/30'
+                  }`}>
+                    {skill.type}
+                  </span>
+                  {skill.enabled ? (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30">
+                      ACTIVE
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-neutral-800 text-neutral-400 border border-neutral-700">
+                      DISABLED
+                    </span>
                   )}
+                </div>
+                <p className="text-xs text-neutral-500 truncate">{skill.description}</p>
+              </div>
 
-                  {/* Enable/Disable Toggle */}
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                {/* Edit Button - available for all custom skill types */}
+                <button
+                  onClick={() => setEditingCustomSkill(skill)}
+                  className={`p-2 hover:bg-[#1a1a1a] transition-colors ${
+                    skill.type === 'COMMAND' ? 'text-neutral-500 hover:text-[#00aaff]' :
+                    skill.type === 'PROMPT' ? 'text-neutral-500 hover:text-[#aa00ff]' :
+                    'text-neutral-500 hover:text-[#ffaa00]'
+                  }`}
+                  title={`Edit ${skill.type.toLowerCase()} skill`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+
+                {/* Enable/Disable Toggle */}
                   <button
                     onClick={() => handleToggleCustomSkillEnabled(skill)}
                     className={`relative w-10 h-5 transition-colors ${
@@ -451,6 +474,11 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
             ))}
           </div>
         </div>
+
+      {customSkills.length === 0 && (
+        <p className="text-xs text-neutral-600 px-4 py-3 bg-[#0a0a0a] border border-[#1a1a1a] border-dashed">
+          No custom skills yet. Click <span className="text-[#00fff2]">New Skill</span> to create one.
+        </p>
       )}
 
       {skills.length === 0 && customSkills.length === 0 && (
@@ -471,13 +499,22 @@ export default function SkillsManagement({ agentId: propAgentId }: SkillsManagem
         />
       )}
 
-      {/* Custom Skill Editor Modal */}
+      {/* Custom Skill Editor Modal (edit) */}
       {editingCustomSkill && agentId && (
         <CustomSkillEditor
           skill={editingCustomSkill}
           agentId={agentId}
           onClose={() => setEditingCustomSkill(null)}
           onSaved={handleCustomSkillUpdated}
+        />
+      )}
+
+      {/* Custom Skill Editor Modal (create) */}
+      {creatingCustomSkill && agentId && (
+        <CustomSkillEditor
+          agentId={agentId}
+          onClose={() => setCreatingCustomSkill(false)}
+          onSaved={handleCustomSkillCreated}
         />
       )}
     </div>

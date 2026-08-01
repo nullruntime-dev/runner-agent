@@ -68,13 +68,17 @@ export default function AddAgentForm() {
           Agent URL
         </label>
         <input
-          type="text"
+          type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="http://192.168.1.100:8090"
           required
+          pattern="https?://[a-zA-Z0-9.\-]+:\d+.*"
           className="w-full h-9 px-3 bg-[#111] border border-[#1a1a1a] text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#00fff2] transition-colors"
         />
+        <p className="mt-1 text-[10px] text-[#555]">
+          Format: <code className="text-[#888]">http://host:port</code> (e.g. <code className="text-[#888]">http://agent-1:8090</code>)
+        </p>
       </div>
 
       <div>

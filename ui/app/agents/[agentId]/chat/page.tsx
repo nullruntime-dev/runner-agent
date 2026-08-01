@@ -7,10 +7,12 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ agentId: string }>;
+  searchParams: Promise<{ skill?: string }>;
 }
 
-export default async function ChatPage({ params }: PageProps) {
+export default async function ChatPage({ params, searchParams }: PageProps) {
   const { agentId } = await params;
+  const { skill } = await searchParams;
   const agent = await getAgent(agentId);
 
   if (!agent) {
@@ -89,7 +91,7 @@ export default async function ChatPage({ params }: PageProps) {
       {/* Chat area */}
       <div className="flex-1 overflow-hidden flex">
         {isOnline ? (
-          <AgentChatClient agentId={agentId} />
+          <AgentChatClient agentId={agentId} initialSkill={skill ?? null} />
         ) : (
           <div className="flex items-center justify-center h-full w-full">
             <div className="text-center">

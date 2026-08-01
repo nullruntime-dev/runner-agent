@@ -78,7 +78,7 @@ public class ScheduledTaskExecutor {
 
         try {
             // Use the agent service to process the prompt
-            String response = agentService.chat(sessionId, prompt).response();
+            String response = agentService.chat(sessionId, prompt, null).response();
             log.info("AI response for scheduled task '{}': {}", task.getName(), truncate(response, 200));
             return response;
         } catch (Exception e) {
@@ -110,7 +110,7 @@ public class ScheduledTaskExecutor {
         String sessionId = "scheduled-skill-" + task.getId() + "-" + System.currentTimeMillis();
 
         try {
-            String response = agentService.chat(sessionId, prompt).response();
+            String response = agentService.chat(sessionId, prompt, null).response();
             return response;
         } catch (Exception e) {
             log.error("Failed to execute skill '{}': {}", skillName, e.getMessage());
@@ -147,7 +147,7 @@ public class ScheduledTaskExecutor {
             case PROMPT -> {
                 String sessionId = "custom-skill-" + task.getId() + "-" + System.currentTimeMillis();
                 try {
-                    yield agentService.chat(sessionId, skill.getDefinitionJson()).response();
+                    yield agentService.chat(sessionId, skill.getDefinitionJson(), null).response();
                 } catch (Exception e) {
                     throw new RuntimeException("Custom prompt execution failed: " + e.getMessage(), e);
                 }

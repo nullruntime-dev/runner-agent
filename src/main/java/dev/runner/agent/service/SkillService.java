@@ -52,6 +52,17 @@ public class SkillService {
                     ))
                     .build(),
             SkillDefinition.builder()
+                    .name("telegram")
+                    .displayName("Telegram")
+                    .description("Chat with the agent via Telegram using long polling (no public URL needed)")
+                    .icon("telegram")
+                    .configFields(List.of(
+                            ConfigField.builder().name("botToken").label("Bot Token").type("password").description("Bot token from @BotFather (e.g. 123456:ABC-DEF...)").required(true).placeholder("123456:ABC-DEF...").build(),
+                            ConfigField.builder().name("allowedUserIds").label("Allowed User IDs").type("text").description("Comma-separated Telegram user IDs allowed to interact with the bot").required(true).placeholder("11111111,22222222").build(),
+                            ConfigField.builder().name("defaultChatId").label("Default Chat ID").type("text").description("Default Telegram chat ID to message when none is specified (e.g. scheduled alerts). Must be in allowedUserIds.").required(false).placeholder("11111111").build()
+                    ))
+                    .build(),
+            SkillDefinition.builder()
                     .name("gmail")
                     .displayName("Gmail")
                     .description("Send emails via Gmail SMTP")
@@ -146,10 +157,12 @@ public class SkillService {
                 skill.setConfigured(true);
                 skill.setEnabled(config.get().isEnabled());
                 skill.setHidden(config.get().isHidden());
+                skill.setConfig(parseConfigJson(config.get().getConfigJson()));
             } else {
                 skill.setConfigured(false);
                 skill.setEnabled(false);
                 skill.setHidden(false);
+                skill.setConfig(new java.util.HashMap<>());
             }
 
             skills.add(skill);
@@ -182,10 +195,23 @@ public class SkillService {
                         skill.setConfigured(true);
                         skill.setEnabled(config.get().isEnabled());
                         skill.setHidden(config.get().isHidden());
+                        skill.setConfig(parseConfigJson(config.get().getConfigJson()));
+                    } else {
+                        skill.setConfig(new java.util.HashMap<>());
                     }
 
                     return skill;
                 });
+    }
+
+    private Map<String, String> parseConfigJson(String json) {
+        if (json == null || json.isBlank()) return new java.util.HashMap<>();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse config_json for skill: {}", e.getMessage());
+            return new java.util.HashMap<>();
+        }
     }
 
     @Transactional

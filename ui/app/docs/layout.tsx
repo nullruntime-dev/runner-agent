@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/docs', label: 'Overview' },
   { href: '/docs/quickstart', label: 'Quick Start' },
+  { href: '/docs/docker', label: 'Docker' },
+  { href: '/docs/cli-executor', label: 'CLI Executor' },
   { href: '/docs/api', label: 'API Reference' },
   { href: '/docs/configuration', label: 'Configuration' },
   { href: '/docs/security', label: 'Security' },

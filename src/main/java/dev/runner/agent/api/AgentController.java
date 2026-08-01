@@ -17,61 +17,116 @@
 
 import com.google.adk.events.Event;
 import dev.runner.agent.adk.AgentService;
+import dev.runner.agent.config.AgentConfig;
 import dev.runner.agent.domain.ChatSession;
 import dev.runner.agent.dto.ChatRequest;
 import dev.runner.agent.dto.ChatResponse;
 import dev.runner.agent.dto.ChatSessionDto;
 import dev.runner.agent.service.ChatService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Slf4j
 @RestController
 @RequestMapping("/agent")
-@RequiredArgsConstructor
 @Validated
 @ConditionalOnBean(AgentService.class)
 public class AgentController {
 
     private final AgentService agentService;
     private final ChatService chatService;
+    private final AgentConfig agentConfig;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
+
+    public AgentController(AgentService agentService, ChatService chatService, AgentConfig agentConfig) {
+        this.agentService = agentService;
+        this.chatService = chatService;
+        this.agentConfig = agentConfig;
+    }
 
     @PostMapping("/chat")
     public ResponseEntity<ChatResponse> chat(@RequestBody @Validated ChatRequest request) {
         log.info("POST /agent/chat sessionId={}", request.getSessionId());
 
-        AgentService.ChatResult result = agentService.chat(request.getSessionId(), request.getMessage());
+        AgentService.ChatResult result = agentService.chat(request.getSessionId(), request.getMessage(), request.getSkill());
 
         ChatResponse response = new ChatResponse(result.sessionId(), result.response());
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Multipart chat: message + optional file (image, text, or arbitrary binary).
+     * Files are saved to {@code <workingDir>/chat-uploads/<sessionId>/<uuid>_<originalName>}
+     * so the agent (and shell tools downstream) can reference them by path.
+     */
+    @PostMapping(value = "/chat/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ChatResponse> chatWithFile(
+            @RequestParam(required = false) String sessionId,
+            @RequestParam(required = false, defaultValue = "") String message,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String skill
+    ) {
+        String sid = sessionId == null || sessionId.isBlank() ? UUID.randomUUID().toString() : sessionId;
+        log.info("POST /agent/chat/file sessionId={} filename={} size={} mime={} skill={}",
+                sid, file.getOriginalFilename(), file.getSize(), file.getContentType(), skill);
+
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("Uploaded file is empty");
+        }
+
+        try {
+            Path dir = Paths.get(agentConfig.getWorkingDir(), "chat-uploads", sid);
+            Files.createDirectories(dir);
+            String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload.bin";
+            // Strip path separators from the original name to keep uploads inside dir.
+            String safeName = original.replaceAll("[\\\\/]", "_");
+            Path target = dir.resolve(UUID.randomUUID() + "_" + safeName);
+            file.transferTo(target);
+
+            AgentService.ChatResult result = agentService.chatWithFile(
+                    sid,
+                    message.isBlank() ? "User attached file: " + safeName : message,
+                    target,
+                    file.getContentType(),
+                    skill
+            );
+            return ResponseEntity.ok(new ChatResponse(result.sessionId(), result.response()));
+        } catch (IOException e) {
+            log.error("Failed to save uploaded file: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to save uploaded file: " + e.getMessage(), e);
+        }
+    }
+
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(
             @RequestParam(required = false) String sessionId,
-            @RequestParam String message
+            @RequestParam String message,
+            @RequestParam(required = false) String skill
     ) {
-        log.info("GET /agent/chat/stream sessionId={}", sessionId);
+        log.info("GET /agent/chat/stream sessionId={} skill={}", sessionId, skill);
 
         String actualSessionId = agentService.getSessionId(sessionId);
         SseEmitter emitter = new SseEmitter(300000L); // 5 minute timeout
 
         executorService.submit(() -> {
             try {
-                agentService.chatStream(actualSessionId, message)
+                agentService.chatStream(actualSessionId, message, skill)
                         .blockingForEach(event -> {
                             try {
                                 sendEvent(emitter, event, actualSessionId);

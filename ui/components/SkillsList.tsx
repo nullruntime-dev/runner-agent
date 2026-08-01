@@ -31,6 +31,11 @@ const skillIcons: Record<string, React.ReactNode> = {
       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
     </svg>
   ),
+  telegram: (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.24 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
+    </svg>
+  ),
 };
 
 const skillColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
@@ -38,6 +43,7 @@ const skillColors: Record<string, { bg: string; text: string; border: string; gl
   email: { bg: 'bg-[#ff0044]/10', text: 'text-[#ff0044]', border: 'border-[#ff0044]/30', glow: 'rgba(255,0,68,0.2)' },
   smtp: { bg: 'bg-[#ff6600]/10', text: 'text-[#ff6600]', border: 'border-[#ff6600]/30', glow: 'rgba(255,102,0,0.2)' },
   heart: { bg: 'bg-[#ff00ea]/10', text: 'text-[#ff00ea]', border: 'border-[#ff00ea]/30', glow: 'rgba(255,0,234,0.2)' },
+  telegram: { bg: 'bg-[#0088cc]/10', text: 'text-[#0088cc]', border: 'border-[#0088cc]/30', glow: 'rgba(0,136,204,0.2)' },
 };
 
 const defaultColors = { bg: 'bg-[#00fff2]/10', text: 'text-[#00fff2]', border: 'border-[#00fff2]/30', glow: 'rgba(0,255,242,0.2)' };

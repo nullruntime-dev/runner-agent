@@ -1,57 +1,76 @@
 services:
-  # Backend - Java/Spring Boot Agent
-  agent:
+  # ============================================
+  # Postgres — shared by all agents
+  # Credentials are hardcoded for local dev only. Do NOT use in production.
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: griphookdev-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=runner
+      - POSTGRES_USER=runner
+      - POSTGRES_PASSWORD=runner
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5431:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runner -d runner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - runner-agent-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ============================================
+  # Backend agents — multiple instances share the same Postgres
+  # ============================================
+  agent-1:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nullruntimedev/griphook-agent:latest
-    container_name: griphookdev-agent
+    image: test-agent-1
+    container_name: griphookdev-agent-1
     restart: unless-stopped
     ports:
-      - "8090:8090"
-    volumes:
-      - agent-data:/app/data
+      - "8009:8080"
     environment:
-      # ===================
-      # Core Configuration
-      # ===================
       - AGENT_TOKEN=${AGENT_TOKEN:-1234}
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
       - AGENT_ADK_MODEL=${AGENT_ADK_MODEL:-gemini-2.0-flash}
       - AGENT_ADK_ENABLED=${AGENT_ADK_ENABLED:-true}
-      - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-/tmp}
+      - AGENT_WORKING_DIR=${AGENT_WORKING_DIR:-tmp}
       - AGENT_DEFAULT_SHELL=${AGENT_DEFAULT_SHELL:-/bin/sh}
       - AGENT_MAX_CONCURRENT=${AGENT_MAX_CONCURRENT:-5}
       - SPRING_PROFILES_ACTIVE=production
-      - SPRING_DATASOURCE_URL=jdbc:h2:file:/app/data/agent-data
-      - H2_CONSOLE_ENABLED=${H2_CONSOLE_ENABLED:-false}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/runner
+      - SPRING_DATASOURCE_USERNAME=runner
+      - SPRING_DATASOURCE_PASSWORD=runner
       - JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC
 
-      # ===================
-      # Slack Skill
-      # ===================
+      # Slack
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - SLACK_DEFAULT_CHANNEL=${SLACK_DEFAULT_CHANNEL:-}
       - SLACK_SLASH_COMMAND=${SLACK_SLASH_COMMAND:-}
 
-      # ===================
-      # Gmail SMTP Skill
-      # ===================
+      # Gmail SMTP
       - GMAIL_EMAIL=${GMAIL_EMAIL:-}
       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
       - GMAIL_DEFAULT_RECIPIENT=${GMAIL_DEFAULT_RECIPIENT:-}
 
-      # ===================
-      # Gmail API Skill (OAuth2)
-      # ===================
+      # Gmail API (OAuth2)
       - GMAIL_API_CLIENT_ID=${GMAIL_API_CLIENT_ID:-}
-      - GMAIL_API_CLIENT_SECRET=${GMAIL_API_CLIENT_SECRET:-}
+      - GMAIL_API_CLIENT_SECRET=${GMAIL_API_SECRET:-}
 
-      # ===================
-      # SMTP Skill
-      # ===================
+      # SMTP
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-}
@@ -61,46 +80,63 @@ services:
       - SMTP_ENCRYPTION=${SMTP_ENCRYPTION:-TLS}
       - SMTP_DEFAULT_RECIPIENT=${SMTP_DEFAULT_RECIPIENT:-}
 
-      # ===================
-      # Wingman Skill
-      # ===================
+      # Wingman
       - FLIRT_USER_NAME=${FLIRT_USER_NAME:-}
       - FLIRT_STYLE=${FLIRT_STYLE:-playful}
       - FLIRT_INTERESTED_IN=${FLIRT_INTERESTED_IN:-}
       - FLIRT_PERSONALITY=${FLIRT_PERSONALITY:-}
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8090/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - runner-agent-net
     deploy:
       resources:
         limits:
           memory: 1G
-        reservations:
-          memory: 512M
-
+  # ============================================
   # Frontend - Next.js UI
+  # ============================================
   ui:
     build:
       context: ./ui
       dockerfile: Dockerfile
-    image: nullruntimedev/griphook-ui:latest
+    image: test-ui
     container_name: griphookdev-ui
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ui-data:/app/data
     environment:
       - NODE_ENV=production
+      # Default agent URL; the UI can be configured to talk to multiple agents
+      # by adding more rows to the Agent table via the AddAgentForm.
+      # When set, the client sends per-agent requests (e.g. /api/agents/{id}/chat)
+      # directly to the backend instead of through the UI's route handlers.
+      # Leave unset to keep using the in-process UI proxy.
     depends_on:
-      agent:
+      agent-1:
         condition: service_healthy
+    networks:
+      - runner-agent-net
+
+networks:
+  runner-agent-net:
+    name: runner-agent-net
+    driver: bridge
 
 volumes:
-  agent-data:
+  postgres-data:
+    name: runner-agent-postgres-data
     driver: local
   ui-data:
     driver: local

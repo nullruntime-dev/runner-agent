@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage as ChatMessageType, Skill, getSkills, getChatStreamUrl, CustomSkill, getCustomSkills, getChatSession } from '@/lib/api';
+import { ChatMessage as ChatMessageType, Skill, getSkills, getChatStreamUrl, CustomSkill, getCustomSkills, getChatSession, sendChatMessageWithFile } from '@/lib/api';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 
@@ -33,6 +33,15 @@ const skillModePrompts: Record<string, { prefix: string; placeholder: string; co
     quickActions: [
       { label: 'Send message', message: 'Send a Slack message: ' },
       { label: 'Notify deployment', message: 'Send a deployment notification for ' },
+    ],
+  },
+  telegram: {
+    prefix: '[Telegram Mode] ',
+    placeholder: 'e.g., "Send a Telegram message about the deploy"',
+    color: 'cyan',
+    quickActions: [
+      { label: 'Send to chat', message: 'Send a Telegram message to chat ' },
+      { label: 'Notify', message: 'Send a Telegram notification: ' },
     ],
   },
   gmail: {
@@ -227,8 +236,7 @@ export default function ChatView({
   const accentColor = currentMode.color as 'cyan' | 'pink';
 
   const handleSendMessage = async (content: string) => {
-    const messageToSend = selectedSkill ? `${currentMode.prefix}${content}` : content;
-
+    // Backend composes the skill directive from `selectedSkill`; send the raw user text.
     const userMessage: ChatMessageType = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -246,7 +254,7 @@ export default function ChatView({
     }
 
     try {
-      const url = getChatStreamUrl(agentId, sessionId, messageToSend);
+      const url = getChatStreamUrl(agentId, sessionId, content, selectedSkill ?? undefined);
       const eventSource = new EventSource(url);
 
       let accumulatedContent = '';
@@ -303,6 +311,49 @@ export default function ChatView({
     }
   };
 
+  /**
+   * Send a chat message with an attached file via the multipart endpoint.
+   * Skips SSE streaming (incompatible with multipart uploads) — single response.
+   */
+  const handleSendWithFile = async (content: string, file: File) => {
+    const userMessage: ChatMessageType = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+    setStreamingContent('');
+
+    if (!externalSessionId && onSessionChange) {
+      onSessionChange(sessionId);
+    }
+
+    try {
+      const data = await sendChatMessageWithFile(agentId, content, file, sessionId, selectedSkill ?? undefined);
+      const response = data.response || '';
+      const assistantMessage: ChatMessageType = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: response,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setStreamingContent(response);
+    } catch (err) {
+      const errorMessage: ChatMessageType = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `Error: ${err instanceof Error ? err.message : 'Failed to send message with file'}`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleClearChat = () => {
     setMessages([]);
     setSessionId(crypto.randomUUID()); // Generate new session for fresh conversation
@@ -321,6 +372,12 @@ export default function ChatView({
         return (
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
             <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" />
+          </svg>
+        );
+      case 'telegram':
+        return (
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.24 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
           </svg>
         );
       case 'gmail':
@@ -595,6 +652,7 @@ export default function ChatView({
       {/* Input area */}
       <ChatInput
         onSend={handleSendMessage}
+        onSendWithFile={handleSendWithFile}
         disabled={isLoading}
         placeholder={currentMode.placeholder}
         accentColor={accentColor}

@@ -19,7 +19,7 @@ export default function ConfigurationPage() {
       <CodeBlock language="yaml">
 {`# Defaults shipped in src/main/resources/application.yml
 server:
-  port: \${SERVER_PORT:8009}                  # install.sh / docker-compose set 8090
+  port: \${SERVER_PORT:8009}                  # docker-compose sets 8090
 
 agent:
   token: \${AGENT_TOKEN:1234}                 # CHANGE in production
@@ -36,21 +36,21 @@ agent:
 
 spring:
   datasource:
-    url: \${SPRING_DATASOURCE_URL:jdbc:h2:file:./agent-data;AUTO_SERVER=TRUE}
-
-  h2:
-    console:
-      enabled: \${H2_CONSOLE_ENABLED:true}    # http://<host>:8090/h2-console`}
+    url: \${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/runner}
+    username: \${SPRING_DATASOURCE_USERNAME:runner}
+    password: \${SPRING_DATASOURCE_PASSWORD:runner}`}
       </CodeBlock>
 
-      <InfoBox type="info" title="Defaults that differ from older docs">
-        <code>AGENT_ADK_PROVIDER</code> defaults to <strong>ollama</strong> (not gemini) and{' '}
-        <code>OLLAMA_MODEL</code> defaults to <strong>minimax-m3:cloud</strong>. The Gemini env vars are only read when
-        the provider is set to <code>gemini</code>. Ollama models must support tool calling
+      <InfoBox type="info" title="Ollama is the default provider">
+        <code>AGENT_ADK_PROVIDER</code> defaults to <strong>ollama</strong> (with{' '}
+        <code>minimax-m3:cloud</code>). To use Gemini, set{' '}
+        <code>AGENT_ADK_PROVIDER=gemini</code> and provide{' '}
+        <code>GOOGLE_AI_API_KEY</code>. Ollama models must support tool calling
         (e.g. <code>llama3.1</code>, <code>mistral</code>, <code>qwen3</code>, <code>mixtral</code>).
+        You can switch providers at runtime from the UI &mdash; no restart.
       </InfoBox>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Command-line overrides</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Command-line overrides</h3>
       <CodeBlock language="bash">
 {`# All yml keys can be overridden via Spring's CLI args
 java -jar runner-agent-0.1.0-SNAPSHOT.jar \\
@@ -71,10 +71,12 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
         You rarely need to touch the UI&apos;s config directly — the setup wizard does it for you.
       </p>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">What the settings wizard writes</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">What the setup wizard writes</h3>
       <p className="text-[#888] mb-4">
-        The wizard saves your config to <code className="text-[#00fff2]">../settings.json</code> at the repo root
-        (one level up from <code>ui/</code>). The file is gitignored. You can also edit it directly:
+        The wizard only marks setup as complete and registers the agent in the UI&apos;s local database.
+        The file it writes &mdash; <code className="text-[#00fff2]">../settings.json</code> at the repo root
+        (one level up from <code>ui/</code>, gitignored) &mdash; holds the <code>setupComplete</code> flag and
+        any defaults the UI uses when calling agents. You can also edit it directly:
       </p>
       <CodeBlock language="json">
 {`{
@@ -93,14 +95,16 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
 }`}
       </CodeBlock>
       <p className="text-[#888] text-sm mt-2">
-        Note: settings written here describe defaults the <em>UI</em> uses when calling agents. Per-agent
-        tokens live in <code>ui/data/runner.db</code> and are managed through <Link href="/agents" className="text-[#00fff2] hover:underline">Manage Agents</Link>.
+        Note: the wizard itself no longer prompts for AI keys or a token &mdash; it only connects an agent.
+        AI provider and model are configured from <strong>Settings &rarr; AI Configuration</strong> (live, no restart).
+        Per-agent tokens live in <code>ui/data/runner.db</code> and are managed through{' '}
+        <Link href="/agents" className="text-[#00fff2] hover:underline">Manage Agents</Link>.
       </p>
 
       {/* AI config */}
       <h2 className="text-xl font-bold text-white mt-10 mb-4">AI configuration (live, no restart)</h2>
       <InfoBox type="tip" title="The only thing you can change at runtime">
-        AI provider + model are persisted to the agent&apos;s H2 <code>skill_configs</code> table under the
+        AI provider + model are persisted to the agent&apos;s Postgres <code>skill_configs</code> table under the
         key <code>ai-provider</code>. Changes take effect on the very next chat request, no agent restart required.
         Reset by deleting that row or by exporting <code>AGENT_ADK_*</code> env vars before first launch.
       </InfoBox>
@@ -115,12 +119,12 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
       {/* Settings sections */}
       <h2 className="text-xl font-bold text-white mt-10 mb-4">The Settings page</h2>
       <p className="text-[#888] mb-4">
-        The Settings UI has six sections:
+        The Settings UI has seven sections:
       </p>
       <div className="space-y-3 mb-6">
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">AI Configuration <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30">LIVE</span></h3>
-          <p className="text-xs text-[#888] mt-1">Switch provider/model. Applies on next chat request.</p>
+          <p className="text-xs text-[#888] mt-1">Switch provider/model. Applies on the next chat request &mdash; no restart.</p>
         </div>
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">API Keys</h3>
@@ -128,7 +132,7 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
         </div>
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">Security</h3>
-          <p className="text-xs text-[#888] mt-1">Agent token (with random generator). Requires backend restart.</p>
+          <p className="text-xs text-[#888] mt-1">Agent token, with a one-click random generator. Requires backend restart.</p>
         </div>
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">Server Settings</h3>
@@ -136,7 +140,7 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
         </div>
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">Skills Management</h3>
-          <p className="text-xs text-[#888] mt-1">Built-in and custom skills — configure, enable/disable, hide.</p>
+          <p className="text-xs text-[#888] mt-1">Built-in and custom skills &mdash; configure, enable/disable, hide.</p>
         </div>
         <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-4">
           <h3 className="text-sm font-semibold text-white">Database</h3>
@@ -178,6 +182,30 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
         </table>
       </div>
 
+      <h3 className="text-lg font-semibold text-white mt-8 mb-3">Telegram</h3>
+      <p className="text-[#888] mb-4">
+        Chat with the agent over Telegram using long polling — no public URL or webhook needed.
+        Auth is allowlist-based: the bot rejects any user id not in <code>allowedUserIds</code>.
+      </p>
+      <div className="bg-[#0a0a0a] border border-[#1a1a1a] overflow-x-auto mb-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#1a1a1a]">
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#444] uppercase">Field</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#444] uppercase">Required</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-[#444] uppercase">Description</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#1a1a1a]">
+            <tr><td className="px-4 py-3 font-mono text-[#ff6600]">Bot Token</td><td className="px-4 py-3 text-[#ff0044]">Yes</td><td className="px-4 py-3 text-[#888]">From <code>@BotFather</code> via <code>/newbot</code> (e.g. <code>123456:ABC-DEF...</code>)</td></tr>
+            <tr><td className="px-4 py-3 font-mono text-[#ff6600]">Allowed User IDs</td><td className="px-4 py-3 text-[#ff0044]">Yes</td><td className="px-4 py-3 text-[#888]">Comma-separated Telegram user ids allowed to talk to the bot. Find yours by messaging the bot then opening <code>https://api.telegram.org/bot&lt;token&gt;/getUpdates</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[#888] mb-4">
+        Built-in slash commands: <code>/help</code>, <code>/status</code>, <code>/skills</code>, <code>/new</code>, <code>/history</code>. Anything else is forwarded to <code>AgentService.chat()</code> with session id <code>telegram-&lt;chatId&gt;</code>. Long replies are chunked at 4000 chars per Telegram message.
+      </p>
+
       <h3 className="text-lg font-semibold text-white mt-8 mb-3">Gmail (SMTP)</h3>
       <p className="text-[#888] mb-4">Send email notifications via Gmail SMTP.</p>
       <div className="bg-[#0a0a0a] border border-[#1a1a1a] overflow-x-auto mb-4">
@@ -194,7 +222,7 @@ SERVER_PORT=8090 AGENT_TOKEN=secret java -jar ...`}
       <h3 className="text-lg font-semibold text-white mt-8 mb-3">Gmail API (OAuth)</h3>
       <p className="text-[#888] mb-4">
         Full Gmail access (read, search, reply) via OAuth2. Click <em>Authorize</em> in the skill config to grant access.
-        Tokens are stored in the agent&apos;s H2 DB (<code>gmail_tokens</code> table) and can be revoked from the UI.
+        Tokens are stored in the agent&apos;s Postgres DB (<code>gmail_tokens</code> table) and can be revoked from the UI.
       </p>
 
       <h3 className="text-lg font-semibold text-white mt-8 mb-3">SMTP (generic)</h3>

@@ -43,11 +43,12 @@ RUN mkdir -p /app/data \
 # Switch to non-root user
 USER appuser
 
-EXPOSE 8090
+EXPOSE 8080
+ENV SERVER_PORT=8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -sf http://localhost:8090/health || exit 1
+    CMD curl -sf http://localhost:8080/health || exit 1
 
 # JVM tuning for containers
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"

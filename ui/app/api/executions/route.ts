@@ -25,21 +25,23 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
-    // Format response
-    const formatted = executions.map((exec) => ({
-      id: exec.id,
-      name: exec.name,
-      status: exec.status,
-      shell: exec.shell,
-      workingDir: exec.workingDir,
-      exitCode: exec.exitCode,
-      error: exec.error,
-      startedAt: exec.startedAt?.toISOString() || null,
-      completedAt: exec.completedAt?.toISOString() || null,
-      createdAt: exec.createdAt.toISOString(),
-      agentId: exec.agent.id,
-      agentName: exec.agent.name,
-    }));
+    // Format response — skip orphaned executions whose agent was deleted.
+    const formatted = executions
+      .filter((exec): exec is typeof exec & { agent: { id: string; name: string } } => exec.agent !== null)
+      .map((exec) => ({
+        id: exec.id,
+        name: exec.name,
+        status: exec.status,
+        shell: exec.shell,
+        workingDir: exec.workingDir,
+        exitCode: exec.exitCode,
+        error: exec.error,
+        startedAt: exec.startedAt?.toISOString() || null,
+        completedAt: exec.completedAt?.toISOString() || null,
+        createdAt: exec.createdAt.toISOString(),
+        agentId: exec.agent.id,
+        agentName: exec.agent.name,
+      }));
 
     return NextResponse.json(formatted);
   } catch (error) {

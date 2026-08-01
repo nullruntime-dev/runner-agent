@@ -152,7 +152,7 @@ export default function AgentSkills({ agentId, isOnline }: AgentSkillsProps) {
                 >
                   <div className="flex items-center gap-2.5">
                     <Link
-                      href={`/agents/${agentId}/chat`}
+                      href={`/agents/${agentId}/chat?skill=${encodeURIComponent(`custom:${skill.name}`)}`}
                       className="flex items-center gap-2.5 flex-1 min-w-0"
                     >
                       <div className={`w-8 h-8 ${colors.bg} ${colors.text} flex items-center justify-center border ${colors.border} flex-shrink-0`}>
