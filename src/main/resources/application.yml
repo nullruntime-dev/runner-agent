@@ -22,15 +22,12 @@ ddgo:
   html: ${DDGO_HTML:https://html.duckduckgo.com/html}
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./agent-data;AUTO_SERVER=TRUE}
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    # PostgreSQL only. Default points at the local docker-compose `postgres` service.
+    # Override SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD for other environments.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/runner}
+    username: ${SPRING_DATASOURCE_USERNAME:runner}
+    password: ${SPRING_DATASOURCE_PASSWORD:runner}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
-  h2:
-    console:
-      enabled: ${H2_CONSOLE_ENABLED:true}
-      path: /h2-console

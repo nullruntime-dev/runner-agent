@@ -6,7 +6,7 @@ export default function BackupPage() {
     <div>
       <h1 className="text-3xl font-bold text-white mb-4">Backup &amp; Database</h1>
       <p className="text-[#888] mb-8">
-        GRIPHOOK has two databases. <strong className="text-white">H2</strong> on each agent holds the
+        GRIPHOOK has two databases. <strong className="text-white">PostgreSQL</strong> on each agent holds the
         canonical execution history. <strong className="text-white">SQLite</strong> on the Control Center
         mirrors agent state for fast querying and offline browsing. Back both up.
       </p>
@@ -32,8 +32,8 @@ export default function BackupPage() {
           <tbody className="text-[#ccc]">
             <tr className="border-b border-[#1a1a1a]">
               <td className="py-3 px-4">Agent (Spring Boot)</td>
-              <td className="py-3 px-4">H2 (file mode)</td>
-              <td className="py-3 px-4"><code>./agent-data.mv.db</code></td>
+              <td className="py-3 px-4">PostgreSQL</td>
+              <td className="py-3 px-4"><code>postgres</code> service (Docker volume <code>postgres-data</code>)</td>
               <td className="py-3 px-4 text-xs">executions, step_results, log_lines, skill_configs, crush_profiles, gmail_tokens, chat_sessions, chat_messages, scheduled_tasks, custom_skills</td>
             </tr>
             <tr className="border-b border-[#1a1a1a]">
@@ -83,7 +83,7 @@ export default function BackupPage() {
         </div>
       </div>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Export schema (JSON)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Export schema (JSON)</h3>
       <CodeBlock language="json">
 {`{
   "version": 1,
@@ -101,7 +101,7 @@ export default function BackupPage() {
       {/* CLI backups */}
       <h2 className="text-xl font-bold text-white mt-10 mb-4">CLI backups</h2>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Control Center (SQLite)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Control Center (SQLite)</h3>
       <CodeBlock language="bash">
 {`# Hot backup while the UI is running (safe, atomic)
 sqlite3 ui/data/runner.db ".backup 'ui/data/runner.db.backup'"
@@ -115,14 +115,13 @@ sqlite3 ui/data/runner.db ".backup 'backups/runner-\$(date +%Y%m%d-%H%M%S).db'"
 find /backups -name 'runner-*.db' -mtime +7 -delete`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Agent (H2)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Agent (PostgreSQL)</h3>
       <CodeBlock language="bash">
 {`# Safest: stop the agent first
 sudo systemctl stop griphook-agent
 
-# Copy
-cp agent-data.mv.db "backups/agent-\$(date +%Y%m%d-%H%M%S).mv.db"
-cp agent-data.trace.db backups/ 2>/dev/null || true
+# Dump the database (adjust credentials/host to match your setup)
+pg_dump -U runner -d runner -h localhost > "backups/agent-$(date +%Y%m%d-%H%M%S).sql"
 
 sudo systemctl start griphook-agent`}
       </CodeBlock>
@@ -144,10 +143,9 @@ cp ../settings.json "\$BACKUP_DIR/settings.json" 2>/dev/null || true
 
 # 3. Each agent (must be reachable over SSH)
 for host in server1 server2 server3; do
-  echo "Backing up \$host..."
-  ssh "\$host" "sudo systemctl stop griphook-agent"
-  scp "\$host:/opt/griphook-agent/agent-data.mv.db" "\$BACKUP_DIR/\$host-agent.mv.db"
-  ssh "\$host" "sudo systemctl start griphook-agent"
+  echo "Backing up $host..."
+  ssh "$host" "pg_dump -U runner -d runner > /tmp/agent-$(date +%Y%m%d).sql"
+  scp "$host:/tmp/agent-$(date +%Y%m%d).sql" "$BACKUP_DIR/$host-agent.sql"
 done
 
 # 4. Compress
@@ -159,7 +157,7 @@ echo "Backup complete: \$BACKUP_DIR.tar.gz"`}
       {/* Restore */}
       <h2 className="text-xl font-bold text-white mt-10 mb-4">Restore</h2>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Control Center (SQLite)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Control Center (SQLite)</h3>
       <CodeBlock language="bash">
 {`# Option A: hot replace (UI is running, but the DB file is held open)
 #   Use the UI: Settings → Database → Choose JSON file. Safer than file-copy.
@@ -172,15 +170,15 @@ sudo systemctl start griphook-ui
 # Then refresh each agent&apos;s token via Manage Agents → Edit.`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Agent (H2)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Agent (PostgreSQL)</h3>
       <CodeBlock language="bash">
 {`sudo systemctl stop griphook-agent
-cp /backups/agent-20240101.mv.db /opt/griphook-agent/agent-data.mv.db
+psql -U runner -d runner -h localhost < /backups/agent-20240101.sql
 sudo systemctl start griphook-agent`}
       </CodeBlock>
 
       <InfoBox type="warning" title="Always back up before migration">
-        H2 uses <code>ddl-auto: update</code> and will auto-migrate its schema on first start.
+        The agent uses Hibernate <code>ddl-auto: update</code> and will auto-migrate its PostgreSQL schema on first start.
         The Control Center uses Prisma migrations applied at <code>ui/docker-entrypoint.sh</code>
         when running in Docker, or <code>npx prisma generate</code> locally. Always snapshot before upgrading.
       </InfoBox>
@@ -194,9 +192,9 @@ sudo systemctl start griphook-agent`}
 rm -f ui/data/runner.db ui/data/runner.db-journal
 # The DB is recreated on next request (Prisma creates the schema; run npx prisma generate first)
 
-# Agent
-rm -f agent-data.mv.db agent-data.trace.db
-# H2 recreates the schema on next start (ddl-auto: update)`}
+# Agent (PostgreSQL)
+docker compose -f docker-compose.postgres.yml down -v
+# The schema is recreated on next agent start (ddl-auto: update)`}
       </CodeBlock>
     </div>
   );

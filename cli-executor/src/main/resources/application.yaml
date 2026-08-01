@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: cli-executor
+token:
+  token: ${SPRING_APPLICATION_TOKEN:1234}
+server:
+  port: 8010

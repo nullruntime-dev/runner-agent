@@ -8,15 +8,16 @@ import ChatSessionsSidebar from './ChatSessionsSidebar';
 
 interface AgentChatClientProps {
   agentId: string;
+  initialSkill?: string | null;
 }
 
 type SidebarTab = 'history' | 'skills';
 
-export default function AgentChatClient({ agentId }: AgentChatClientProps) {
+export default function AgentChatClient({ agentId, initialSkill }: AgentChatClientProps) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(initialSkill ?? null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>('history');
 

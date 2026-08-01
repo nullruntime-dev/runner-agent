@@ -29,4 +29,7 @@
 
       @NotBlank(message = "message is required")
       private String message;
+
+      /** Optional skill identifier, e.g. "flirt", "custom:deploy-prod". Backward-compatible (nullable). */
+      private String skill;
   }

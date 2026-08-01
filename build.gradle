@@ -11,6 +11,14 @@ java {
     sourceCompatibility = JavaVersion.VERSION_21
 }
 
+// Retain parameter names in bytecode so Google ADK FunctionTool can bind model
+// args to method params via @Schema(name=...) or reflected names. Without this
+// javac emits arg0/arg1 and ADK throws "The parameter 'arg0' was not found in
+// the arguments provided by the model."
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += '-parameters'
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
@@ -27,6 +35,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
+    // Database: PostgreSQL only. The JDBC URL is configured via
+    // SPRING_DATASOURCE_URL (see application.yml).
+    runtimeOnly 'org.postgresql:postgresql'
+
     // Google ADK for AI agent
     implementation 'com.google.adk:google-adk:0.9.0'
 
@@ -38,16 +50,21 @@ dependencies {
     implementation 'com.slack.api:bolt-socket-mode:1.44.2'
     implementation 'org.java-websocket:Java-WebSocket:1.5.7'
 
+    // Telegram Bots (Spring Boot starter + long-polling)
+    implementation 'org.telegram:telegrambots-springboot-longpolling-starter:10.1.1'
+    implementation 'org.telegram:telegrambots-client:10.1.1'
+
     // Email (Gmail SMTP)
     implementation 'com.sun.mail:javax.mail:1.6.2'
+
+    // SSH client for executing shell commands on remote hosts (host-exec skill)
+    implementation 'com.hierynomus:sshj:0.39.0'
 
     // Google Gmail API (OAuth2 + full API access)
     implementation 'com.google.api-client:google-api-client:2.3.0'
     implementation 'com.google.oauth-client:google-oauth-client:1.35.0'
     implementation 'com.google.apis:google-api-services-gmail:v1-rev20240520-2.0.0'
     implementation 'com.google.auth:google-auth-library-oauth2-http:1.23.0'
-
-    runtimeOnly 'com.h2database:h2'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

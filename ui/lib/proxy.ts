@@ -11,12 +11,18 @@ export function resolveAgentToken(agent: Pick<Agent, 'token'>): string {
   return DEFAULT_AGENT_TOKEN;
 }
 
+function resolveAgentBaseUrl(agent: Pick<Agent, 'url'>): string {
+  const override = process.env.AGENT_URL?.trim();
+  if (override) return override.replace(/\/+$/, '');
+  return agent.url.replace(/\/+$/, '');
+}
+
 export async function proxyToAgent(
   agent: Pick<Agent, 'url' | 'token'>,
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
-  const baseUrl = agent.url.replace(/\/+$/, '');
+  const baseUrl = resolveAgentBaseUrl(agent);
   const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const headers = new Headers(init.headers);

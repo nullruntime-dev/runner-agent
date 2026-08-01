@@ -25,20 +25,22 @@ async function getAgentExecutions(agentId: string): Promise<Execution[]> {
     take: 100,
   });
 
-  return executions.map((exec) => ({
-    id: exec.id,
-    name: exec.name,
-    status: exec.status as Execution['status'],
-    shell: exec.shell || '',
-    workingDir: exec.workingDir || '',
-    exitCode: exec.exitCode,
-    error: exec.error,
-    startedAt: exec.startedAt?.toISOString() || null,
-    completedAt: exec.completedAt?.toISOString() || null,
-    createdAt: exec.createdAt.toISOString(),
-    agentId: exec.agent.id,
-    agentName: exec.agent.name,
-  }));
+  return executions
+    .filter((exec): exec is typeof exec & { agent: { id: string; name: string } } => exec.agent !== null)
+    .map((exec) => ({
+      id: exec.id,
+      name: exec.name,
+      status: exec.status as Execution['status'],
+      shell: exec.shell || '',
+      workingDir: exec.workingDir || '',
+      exitCode: exec.exitCode,
+      error: exec.error,
+      startedAt: exec.startedAt?.toISOString() || null,
+      completedAt: exec.completedAt?.toISOString() || null,
+      createdAt: exec.createdAt.toISOString(),
+      agentId: exec.agent.id,
+      agentName: exec.agent.name,
+    }));
 }
 
 export default async function AgentDetailPage({ params }: PageProps) {

@@ -25,6 +25,7 @@
   import lombok.extern.slf4j.Slf4j;
   import org.springframework.scheduling.annotation.Async;
   import org.springframework.stereotype.Service;
+  import org.springframework.transaction.annotation.Propagation;
   import org.springframework.transaction.annotation.Transactional;
 
   import java.time.Instant;
@@ -47,7 +48,7 @@
 
       private final ConcurrentHashMap<String, StepRunner.ProcessHolder> activeProcesses = new ConcurrentHashMap<>();
 
-      @Transactional
+      @Transactional(propagation = Propagation.REQUIRES_NEW)
       public Execution createExecution(ExecuteRequest request) {
           String id = request.getId() != null ? request.getId() : UUID.randomUUID().toString();
 

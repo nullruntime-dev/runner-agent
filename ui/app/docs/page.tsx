@@ -98,7 +98,7 @@ export default function DocsPage() {
       ┌───────────────┐                   ┌───────────────┐
       │  Agent #1     │                   │  Agent #2     │
       │  Spring Boot  │                   │  Spring Boot  │
-      │  H2 DB        │                   │  H2 DB        │
+      │  PostgreSQL   │                   │  PostgreSQL   │
       │  Port 8090    │                   │  Port 8091    │
       └───────────────┘                   └───────────────┘
               │
@@ -112,7 +112,7 @@ export default function DocsPage() {
         <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4">
           <h3 className="text-sm font-semibold text-white mb-2">Agent (Java / Spring Boot 3.4)</h3>
           <p className="text-sm text-[#888]">
-            A small service that runs on each target host. Executes shell commands via <code className="text-[#00fff2]">ExecutorService</code>, streams stdout/stderr over SSE, persists executions + logs in H2, and exposes a REST API (<code className="text-[#00fff2]">/execute</code>, <code className="text-[#00fff2]">/execution/&#123;id&#125;</code>, <code className="text-[#00fff2]">/agent/chat</code>, <code className="text-[#00fff2]">/agent/skills</code>, etc.). Google ADK powers the AI chat; LangChain4j bridges to Ollama.
+            A small service that runs on each target host. Executes shell commands via <code className="text-[#00fff2]">ExecutorService</code>, streams stdout/stderr over SSE, persists executions + logs in PostgreSQL, and exposes a REST API (<code className="text-[#00fff2]">/execute</code>, <code className="text-[#00fff2]">/execution/&#123;id&#125;</code>, <code className="text-[#00fff2]">/agent/chat</code>, <code className="text-[#00fff2]">/agent/skills</code>, etc.). Google ADK powers the AI chat; LangChain4j bridges to Ollama.
           </p>
         </div>
         <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4">
@@ -139,6 +139,12 @@ export default function DocsPage() {
           className="inline-flex h-10 px-6 bg-gradient-to-r from-[#00fff2] to-[#00cccc] hover:from-[#00cccc] hover:to-[#00fff2] text-black text-sm font-semibold items-center transition-all shadow-[0_0_20px_rgba(0,255,242,0.3)]"
         >
           Quick Start
+        </Link>
+        <Link
+          href="/docs/docker"
+          className="inline-flex h-10 px-6 border border-[#1a1a1a] text-[#ccc] hover:text-white hover:border-[#2a2a2a] text-sm font-semibold items-center transition-all"
+        >
+          Docker
         </Link>
         <Link
           href="/docs/deployment"

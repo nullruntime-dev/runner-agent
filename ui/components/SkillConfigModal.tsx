@@ -20,12 +20,18 @@ export default function SkillConfigModal({
   onDeactivate,
   saving,
 }: SkillConfigModalProps) {
-  const [config, setConfig] = useState<Record<string, string>>({});
+  const [config, setConfig] = useState<Record<string, string>>(() => ({
+    ...(skill.config || {}),
+  }));
   const [enabled, setEnabled] = useState(skill.enabled);
   const [deactivating, setDeactivating] = useState(false);
   const [gmailAuthStatus, setGmailAuthStatus] = useState<GmailAuthStatus | null>(null);
   const [gmailAuthLoading, setGmailAuthLoading] = useState(false);
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConfig({ ...(skill.config || {}) });
+  }, [skill.name, skill.config]);
 
   useEffect(() => {
     if (skill.name === 'gmail-api') {
@@ -156,6 +162,26 @@ export default function SkillConfigModal({
               </div>
             )}
 
+            {/* Telegram Setup Instructions */}
+            {skill.name === 'telegram' && (
+              <div className="bg-[#111] border border-[#1a1a1a]  p-4 text-xs">
+                <p className="text-[#0088cc] font-medium mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.24 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+                  Telegram Bot Setup
+                </p>
+                <ol className="text-neutral-500 space-y-2 list-decimal list-inside">
+                  <li>Open Telegram, talk to <span className="text-white">@BotFather</span>, send <code className="bg-[#0a0a0a] px-1.5 py-0.5  text-[#00fff2]">/newbot</code></li>
+                  <li>Follow prompts to name your bot, then copy the token</li>
+                  <li>Send any message to your new bot, then visit <code className="bg-[#0a0a0a] px-1.5 py-0.5  text-[#00fff2] break-all">https://api.telegram.org/bot&lt;token&gt;/getUpdates</code> to find your user id in the <code>from.id</code> field</li>
+                  <li>Paste the token and your user id above (comma-separated for multiple users)</li>
+                </ol>
+                <p className="text-[#00ff66] mt-3 flex items-center gap-1.5">
+                  <span className="w-2 h-2  bg-[#00ff66]" />
+                  No public URL needed - long polling!
+                </p>
+              </div>
+            )}
+
             {/* Gmail SMTP Setup */}
             {skill.name === 'gmail' && (
               <div className="bg-[#111] border border-[#1a1a1a]  p-4 text-xs">
@@ -281,7 +307,13 @@ export default function SkillConfigModal({
                   {field.label}
                   {field.required && <span className="text-[#ff0044] ml-1">*</span>}
                 </label>
-                {field.type === 'select' ? (
+                {field.name === 'allowedUserIds' ? (
+                  <UserIdChips
+                    value={config[field.name] || ''}
+                    onChange={(v) => handleFieldChange(field.name, v)}
+                    placeholder={field.placeholder}
+                  />
+                ) : field.type === 'select' ? (
                   <select
                     value={config[field.name] || ''}
                     onChange={(e) => handleFieldChange(field.name, e.target.value)}
@@ -356,6 +388,84 @@ export default function SkillConfigModal({
             </div>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Comma-separated user IDs rendered as removable chips with an inline add input.
+ * Out-of-scope values (non-digits, empty) are filtered; the underlying value stays
+ * a CSV string for backwards compatibility with the backend.
+ */
+function UserIdChips({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (csv: string) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState('');
+  const ids = value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const writeIds = (next: string[]) => {
+    onChange(next.join(','));
+  };
+
+  const addDraft = () => {
+    const trimmed = draft.trim();
+    if (!trimmed || !/^\d+$/.test(trimmed)) return;
+    if (ids.includes(trimmed)) {
+      setDraft('');
+      return;
+    }
+    writeIds([...ids, trimmed]);
+    setDraft('');
+  };
+
+  const remove = (id: string) => writeIds(ids.filter((x) => x !== id));
+
+  return (
+    <div className="bg-[#111] border border-[#1a1a1a]  px-3 py-2 focus-within:border-[#00fff2] transition-colors">
+      <div className="flex flex-wrap gap-2 items-center">
+        {ids.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1.5 bg-[#0088cc]/15 border border-[#0088cc]/40  px-2.5 py-1 text-xs text-[#66c5ff] font-mono"
+          >
+            {id}
+            <button
+              type="button"
+              onClick={() => remove(id)}
+              className="text-[#66c5ff]/70 hover:text-[#ff0044] transition-colors leading-none"
+              aria-label={`Remove ${id}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault();
+              addDraft();
+            } else if (e.key === 'Backspace' && draft === '' && ids.length > 0) {
+              remove(ids[ids.length - 1]);
+            }
+          }}
+          onBlur={addDraft}
+          placeholder={ids.length === 0 ? placeholder : 'Add another ID…'}
+          inputMode="numeric"
+          className="flex-1 min-w-[120px] bg-transparent text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none py-1"
+        />
       </div>
     </div>
   );

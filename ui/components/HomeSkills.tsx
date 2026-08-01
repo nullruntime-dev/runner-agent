@@ -109,7 +109,7 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
           {activeSkills.map((skill) => (
             <Link
               key={skill.name}
-              href={`/agents/${agentId}/chat`}
+              href={`/agents/${agentId}/chat?skill=${encodeURIComponent(skill.name)}`}
               className="flex items-center gap-3 px-2 py-2 hover:bg-[#111] transition-colors group"
             >
               <div className={`w-8 h-8 bg-[#111] flex items-center justify-center ${skillColors[skill.icon] || 'text-[#00fff2]'}`}>
@@ -140,7 +140,7 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
           {inactiveSkills.map((skill) => (
             <Link
               key={skill.name}
-              href={`/agents/${agentId}/chat`}
+              href={`/agents/${agentId}/chat?skill=${encodeURIComponent(skill.name)}`}
               className="flex items-center gap-3 px-2 py-2 hover:bg-[#111] transition-colors group"
             >
               <div className={`w-8 h-8 bg-[#0a0a0a] flex items-center justify-center text-[#888]`}>
@@ -170,7 +170,7 @@ export default function HomeSkills({ agentId, agentName, isOnline }: HomeSkillsP
             {customSkills.filter(s => s.enabled && !s.hidden).map((skill) => (
               <Link
                 key={skill.name}
-                href={`/agents/${agentId}/chat`}
+                href={`/agents/${agentId}/chat?skill=${encodeURIComponent(`custom:${skill.name}`)}`}
                 className="flex items-center gap-3 px-2 py-2 hover:bg-[#111] transition-colors group"
               >
                 <div className={`w-8 h-8 bg-[#111] flex items-center justify-center ${

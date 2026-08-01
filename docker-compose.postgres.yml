@@ -1,0 +1,44 @@
+# Standalone Postgres for the runner-agent stack.
+# Bring up:  docker compose -f docker-compose.postgres.yml up -d
+# Tear down: docker compose -f docker-compose.postgres.yml down
+# Wipe data: docker compose -f docker-compose.postgres.yml down -v
+#
+# Credentials are hardcoded for local dev only. Do NOT use these in production.
+# Compose files for the agents (docker-compose.local.yml, docker-compose.prod.yml)
+# join this Postgres on the `runner-agent-net` external network and use the
+# service name `postgres` as the JDBC host.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: runner-agent-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=runner
+      - POSTGRES_USER=runner
+      - POSTGRES_PASSWORD=runner
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runner -d runner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - runner-agent-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  runner-agent-net:
+    name: runner-agent-net
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: runner-agent-postgres-data
+    driver: local

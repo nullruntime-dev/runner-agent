@@ -19,6 +19,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get('sessionId') || '';
   const message = searchParams.get('message') || '';
+  const skill = searchParams.get('skill') || '';
 
   if (!message) {
     return new Response(JSON.stringify({ error: 'Message is required' }), {
@@ -28,7 +29,9 @@ export async function GET(
   }
 
   try {
-    const response = await proxyToAgent(agent, `/agent/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`, {
+    let backendUrl = `/agent/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`;
+    if (skill) backendUrl += `&skill=${encodeURIComponent(skill)}`;
+    const response = await proxyToAgent(agent, backendUrl, {
       headers: { Accept: 'text/event-stream' },
     });
 

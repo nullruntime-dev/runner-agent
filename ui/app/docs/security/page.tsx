@@ -18,7 +18,7 @@ export default function SecurityPage() {
       <ul className="space-y-3 text-[#888]">
         <li className="flex items-start gap-3">
           <span className="text-[#00ff66] mt-1">✓</span>
-          <span>All agent endpoints (except <code className="text-[#00fff2]">/health</code>, the H2 console, and OAuth callbacks) require Bearer token auth via <code>ApiKeyFilter</code>.</span>
+          <span>All agent endpoints (except <code className="text-[#00fff2]">/health</code> and OAuth callbacks) require Bearer token auth via <code>ApiKeyFilter</code>.</span>
         </li>
         <li className="flex items-start gap-3">
           <span className="text-[#00ff66] mt-1">✓</span>
@@ -38,7 +38,7 @@ export default function SecurityPage() {
       <ul className="space-y-3 text-[#888]">
         <li className="flex items-start gap-3">
           <span className="text-[#ff6600] mt-1">!</span>
-          <span>Use strong, randomly generated tokens (32+ characters). The setup wizard has a one-click generator.</span>
+          <span>Use strong, randomly generated tokens (32+ characters). <strong>Settings &rarr; Security</strong> has a one-click generator, or run <code>openssl rand -hex 32</code> and set it as <code>AGENT_TOKEN</code> in your <code>.env</code>.</span>
         </li>
         <li className="flex items-start gap-3">
           <span className="text-[#ff6600] mt-1">!</span>
@@ -127,7 +127,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`}
         </li>
         <li className="flex items-start gap-3">
           <span className="text-[#ff6600] mt-1">!</span>
-          <span>The agent H2 DB at <code>./agent-data.mv.db</code> contains Gmail OAuth tokens (<code>gmail_tokens</code> table). Same: restrict permissions.</span>
+          <span>The agent&apos;s PostgreSQL database contains Gmail OAuth tokens (<code>gmail_tokens</code> table). Restrict access to the Postgres instance and use strong credentials in production.</span>
         </li>
         <li className="flex items-start gap-3">
           <span className="text-[#ff6600] mt-1">!</span>

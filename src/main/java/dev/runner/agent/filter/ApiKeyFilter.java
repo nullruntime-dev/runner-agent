@@ -39,8 +39,8 @@
                                       FilterChain filterChain) throws ServletException, IOException {
           String path = request.getRequestURI();
 
-          // Skip auth for health, H2 console, OAuth callback, and CORS preflight
-          if (path.equals("/health") || path.startsWith("/h2-console")
+          // Skip auth for health, OAuth callback, and CORS preflight
+          if (path.equals("/health")
                   || path.equals("/agent/gmail/auth/callback")
                   || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
               filterChain.doFilter(request, response);

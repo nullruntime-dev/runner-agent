@@ -26,9 +26,12 @@ import com.google.genai.types.Content;
 import com.google.genai.types.Part;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.runner.agent.adk.tools.*;
+import dev.runner.agent.domain.CustomSkill;
+import dev.runner.agent.domain.CustomSkillType;
 import dev.runner.agent.service.AIConfigService;
 import dev.runner.agent.service.AIConfigService.AIProviderConfig;
 import dev.runner.agent.service.ChatService;
+import dev.runner.agent.service.CustomSkillService;
 import io.reactivex.rxjava3.core.Flowable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,6 +41,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +60,7 @@ public class AgentService {
             - View execution logs and troubleshoot failures
             - Cancel running executions
             - Send notifications to Slack (if configured)a
+            - Send messages to Telegram (if configured)
             - Send emails via Gmail or SMTP (if configured)
             - Read, search, and manage Gmail emails via Gmail API (if configured)
             - Help with flirting and dating conversations (if configured)
@@ -81,6 +87,12 @@ public class AgentService {
             For Slack notifications:
             - Use send_slack_message for simple text messages
             - Use send_slack_deployment_notification for formatted deployment updates with status
+
+            For Telegram notifications:
+            - chat_id is OPTIONAL for send_telegram_message and send_telegram_photo — if a defaultChatId is configured, omit chat_id and the tool uses the default. Only pass chat_id when you need to target a specific user.
+            - When you DO need a specific chat_id and don't know it, call list_allowed_telegram_chats FIRST — it returns the configured allowlist. Never ask the user for their chat_id; if Telegram is configured, the IDs are right there.
+            - Use send_telegram_message(message) or send_telegram_message(chat_id, message) to send a plain-text message.
+            - Use send_telegram_photo(url, caption) or send_telegram_photo(chat_id, url, caption) to send an image. The tool downloads the URL bytes and uploads them to Telegram (Telegram rejects external URLs directly). Use this for screenshots, generated images, or any visual artifact.
             
             For email notifications (Gmail SMTP or generic SMTP):
             - Use send_email for general emails (to, subject, body)
@@ -165,6 +177,7 @@ public class AgentService {
             When messages start with a mode prefix, focus on that skill:
             - [Wingman Mode] = Focus on dating/flirting help. Be charming, witty, and give multiple response options.
             - [Slack Mode] = Focus on sending Slack messages/notifications.
+            - [Telegram Mode] = Focus on sending Telegram messages/notifications.
             - [Gmail Mode] = Focus on sending emails via Gmail SMTP.
             - [Gmail API Mode] = Focus on reading, searching, and managing Gmail emails via API.
             - [SMTP Mode] = Focus on sending emails via SMTP.
@@ -243,6 +256,7 @@ public class AgentService {
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final ChatService chatService;
     private final AIConfigService aiConfigService;
+    private final CustomSkillService customSkillService;
     private final List<FunctionTool> tools;
     private final AtomicLong lastConfigVersion = new AtomicLong(-1);
     private final ReentrantLock runnerLock = new ReentrantLock();
@@ -250,12 +264,14 @@ public class AgentService {
     public AgentService(
             AdkConfig adkConfig,
             AIConfigService aiConfigService,
+            CustomSkillService customSkillService,
             ExecuteCommandsTool executeCommandsTool,
             GetExecutionStatusTool getExecutionStatusTool,
             ListExecutionsTool listExecutionsTool,
             CancelExecutionTool cancelExecutionTool,
             ReadLogsTool readLogsTool,
             SlackTool slackTool,
+            TelegramTool telegramTool,
             GmailTool gmailTool,
             GmailApiTool gmailApiTool,
             SmtpTool smtpTool,
@@ -263,12 +279,14 @@ public class AgentService {
             CustomSkillTool customSkillTool,
             ScheduleTool scheduleTool,
             WebSearchTool webSearchTool,
+            HostExecTool hostExecTool,
             ChatService chatService
     ) {
         log.info("Initializing ADK AgentService");
 
         this.aiConfigService = aiConfigService;
         this.chatService = chatService;
+        this.customSkillService = customSkillService;
         this.runConfig = RunConfig.builder().setMaxLlmCalls(Integer.MAX_VALUE - 1).build();
         this.tools = new ArrayList<>();
         tools.add(FunctionTool.create(executeCommandsTool, "executeCommands"));
@@ -283,6 +301,12 @@ public class AgentService {
         tools.add(FunctionTool.create(slackTool, "sendMessage"));
         tools.add(FunctionTool.create(slackTool, "sendDeploymentNotification"));
         log.info("Slack integration tools registered (configuration checked at runtime)");
+
+        // Telegram tool (configuration checked at runtime)
+        tools.add(FunctionTool.create(telegramTool, "sendMessage"));
+        tools.add(FunctionTool.create(telegramTool, "sendPhoto"));
+        tools.add(FunctionTool.create(telegramTool, "listAllowedChats"));
+        log.info("Telegram integration tools registered (configuration checked at runtime)");
 
         // Gmail SMTP tools
         tools.add(FunctionTool.create(gmailTool, "sendEmail"));
@@ -408,7 +432,7 @@ public class AgentService {
         }
     }
 
-    public ChatResult chat(String sessionId, String message) {
+    public ChatResult chat(String sessionId, String message, String skill) {
         // Check if AI config changed and reload if needed
         checkAndReloadConfig();
 
@@ -416,9 +440,9 @@ public class AgentService {
             sessionId = UUID.randomUUID().toString();
         }
 
-        log.info("Processing chat sessionId={} message={}", sessionId, message);
+        log.info("Processing chat sessionId={} message={} skill={}", sessionId, message, skill);
 
-        // Persist chat session and user message
+        // Persist chat session and raw user message (clean, no skill directive)
         chatService.getOrCreateSession(sessionId);
         chatService.saveUserMessage(sessionId, message);
 
@@ -428,7 +452,8 @@ public class AgentService {
 
         try {
             Session session = getOrCreateSession(sessionId);
-            Content userMsg = Content.fromParts(Part.fromText(message));
+            String scopedMessage = buildSkillScopedMessage(message, skill);
+            Content userMsg = Content.fromParts(Part.fromText(scopedMessage));
 
             Flowable<Event> events = runner.runAsync(session.userId(), session.id(), userMsg, runConfig);
 
@@ -463,7 +488,156 @@ public class AgentService {
         }
     }
 
-    public Flowable<Event> chatStream(String sessionId, String message) {
+    /**
+     * Send a chat message with an inline image attachment. Used by channels
+     * (Telegram) that deliver images as local files. For vision-capable models
+     * the bytes are forwarded as a multimodal Part; others will ignore the
+     * image and respond to the text prompt.
+     */
+    public ChatResult chatWithImage(String sessionId, String message, java.nio.file.Path imagePath, String mimeType, String skill) {
+        checkAndReloadConfig();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+        log.info("Processing chat with image sessionId={} message={} path={} mime={} skill={}",
+                sessionId, message, imagePath, mimeType, skill);
+
+        chatService.getOrCreateSession(sessionId);
+        chatService.saveUserMessage(sessionId, message);
+
+        FlirtTool.setCurrentSession(sessionId);
+        WebSearchTool.clearSessionSearchCount(sessionId);
+
+        try {
+            byte[] bytes = Files.readAllBytes(imagePath);
+            String mime = mimeType != null ? mimeType : "image/jpeg";
+            Session session = getOrCreateSession(sessionId);
+            String scopedMessage = buildSkillScopedMessage(message, skill);
+            Content userMsg = Content.fromParts(
+                    Part.fromText(scopedMessage),
+                    Part.fromBytes(bytes, mime)
+            );
+
+            Flowable<Event> events = runner.runAsync(session.userId(), session.id(), userMsg, runConfig);
+
+            StringBuilder responseBuilder = new StringBuilder();
+            String finalSessionId = sessionId;
+
+            events.blockingForEach(event -> {
+                if (event.finalResponse()) {
+                    String content = event.stringifyContent();
+                    String transformed = transformAdkContent(content);
+                    if (transformed != null) {
+                        responseBuilder.append(transformed);
+                    }
+                }
+            });
+
+            String response = responseBuilder.toString();
+            if (response.isBlank()) {
+                response = "I processed your request but have no additional response.";
+            }
+            chatService.saveAssistantMessage(sessionId, response);
+            log.info("Chat-with-image completed sessionId={} responseLength={}", sessionId, response.length());
+            return new ChatResult(sessionId, response);
+        } catch (Exception e) {
+            log.error("chatWithImage failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to process image: " + e.getMessage(), e);
+        } finally {
+            FlirtTool.clearCurrentSession();
+        }
+    }
+
+    /**
+     * Send a chat message with an arbitrary file attachment.
+     * - Images (image/* mimes) are forwarded as inline multimodal Parts.
+     * - Text-like files (text/*, JSON, CSV, source) are read and inlined up to a
+     *   soft cap; if they exceed the cap or are non-text binary, the agent is
+     *   told the file's on-disk path so its shell tools can read it.
+     */
+    public ChatResult chatWithFile(String sessionId, String message, java.nio.file.Path filePath, String mimeType, String skill) {
+        checkAndReloadConfig();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+        log.info("Processing chat with file sessionId={} message={} path={} mime={} skill={}",
+                sessionId, message, filePath, mimeType, skill);
+
+        chatService.getOrCreateSession(sessionId);
+        chatService.saveUserMessage(sessionId, message);
+
+        FlirtTool.setCurrentSession(sessionId);
+        WebSearchTool.clearSessionSearchCount(sessionId);
+
+        try {
+            Session session = getOrCreateSession(sessionId);
+            String scopedMessage = buildSkillScopedMessage(message, skill);
+            Content userMsg = buildUserContentWithFile(scopedMessage, filePath, mimeType);
+
+            Flowable<Event> events = runner.runAsync(session.userId(), session.id(), userMsg, runConfig);
+            StringBuilder responseBuilder = new StringBuilder();
+
+            events.blockingForEach(event -> {
+                if (event.finalResponse()) {
+                    String content = event.stringifyContent();
+                    String transformed = transformAdkContent(content);
+                    if (transformed != null) {
+                        responseBuilder.append(transformed);
+                    }
+                }
+            });
+
+            String response = responseBuilder.toString();
+            if (response.isBlank()) {
+                response = "I processed your request but have no additional response.";
+            }
+            chatService.saveAssistantMessage(sessionId, response);
+            log.info("Chat-with-file completed sessionId={} responseLength={}", sessionId, response.length());
+            return new ChatResult(sessionId, response);
+        } catch (Exception e) {
+            log.error("chatWithFile failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to process file: " + e.getMessage(), e);
+        } finally {
+            FlirtTool.clearCurrentSession();
+        }
+    }
+
+    /** 64KB. Files larger than this get path-only treatment to keep prompts sane. */
+    private static final long TEXT_INLINE_MAX_BYTES = 64 * 1024L;
+
+    private Content buildUserContentWithFile(String message, java.nio.file.Path filePath, String mimeType) throws java.io.IOException {
+        String mime = mimeType != null ? mimeType : "application/octet-stream";
+        if (mime.startsWith("image/")) {
+            byte[] bytes = Files.readAllBytes(filePath);
+            return Content.fromParts(Part.fromText(message), Part.fromBytes(bytes, mime));
+        }
+        if (isInlineText(mime)) {
+            long size = Files.size(filePath);
+            if (size <= TEXT_INLINE_MAX_BYTES) {
+                String content = Files.readString(filePath);
+                String body = "File: " + filePath.getFileName() + " (" + mime + ", " + size + " bytes)\n\n" + content;
+                return Content.fromParts(Part.fromText(message), Part.fromText(body));
+            }
+            // Too large to inline — point the agent at the path so its shell tools can read it.
+            String note = "[file saved to: " + filePath + " (" + mime + ", " + size + " bytes) — exceeds inline limit, use shell tools to read]";
+            return Content.fromParts(Part.fromText(message), Part.fromText(note));
+        }
+        // Binary / unknown: give the model the path. shell tools can probe content.
+        long size = Files.size(filePath);
+        String note = "[file saved to: " + filePath + " (" + mime + ", " + size + " bytes) — use shell tools (file, exiftool, strings, hexdump, etc.) to inspect]";
+        return Content.fromParts(Part.fromText(message), Part.fromText(note));
+    }
+
+    private static boolean isInlineText(String mime) {
+        if (mime.startsWith("text/")) return true;
+        return mime.equals("application/json")
+                || mime.equals("application/xml")
+                || mime.equals("application/x-yaml")
+                || mime.equals("application/csv")
+                || mime.equals("application/javascript");
+    }
+
+    public Flowable<Event> chatStream(String sessionId, String message, String skill) {
         // Check if AI config changed and reload if needed
         checkAndReloadConfig();
 
@@ -471,9 +645,9 @@ public class AgentService {
             sessionId = UUID.randomUUID().toString();
         }
 
-        log.info("Processing streaming chat sessionId={} message={}", sessionId, message);
+        log.info("Processing streaming chat sessionId={} message={} skill={}", sessionId, message, skill);
 
-        // Persist chat session and user message
+        // Persist chat session and raw user message (clean, no skill directive)
         chatService.getOrCreateSession(sessionId);
         chatService.saveUserMessage(sessionId, message);
 
@@ -481,7 +655,8 @@ public class AgentService {
         FlirtTool.setCurrentSession(sessionId);
 
         Session session = getOrCreateSession(sessionId);
-        Content userMsg = Content.fromParts(Part.fromText(message));
+        String scopedMessage = buildSkillScopedMessage(message, skill);
+        Content userMsg = Content.fromParts(Part.fromText(scopedMessage));
 
         // Accumulate response for persistence
         AtomicReference<StringBuilder> responseBuilder = new AtomicReference<>(new StringBuilder());
@@ -530,6 +705,89 @@ public class AgentService {
         // Archive the persisted chat session
         chatService.archiveSession(sessionId);
         log.info("Cleared session id={}", sessionId);
+    }
+
+    /**
+     * Compose a per-request skill directive and prepend it to the user's message.
+     * The raw user message is persisted separately (chatService.saveUserMessage);
+     * only the LLM sees this composed string. Returns the original message
+     * unchanged when {@code skill} is null/blank.
+     */
+    private String buildSkillScopedMessage(String message, String skill) {
+        if (skill == null || skill.isBlank()) {
+            return message;
+        }
+
+        String trimmed = skill.trim();
+        if (trimmed.startsWith("custom:")) {
+            String name = trimmed.substring("custom:".length());
+            java.util.Optional<CustomSkill> opt = customSkillService.getSkill(name);
+            if (opt.isEmpty()) {
+                // Unknown custom skill — fall back to a generic directive
+                return "You are in \"" + name + "\" skill mode. If the user asks for something unrelated, "
+                        + "decline and tell them to switch to General mode.\n\nUSER MESSAGE:\n" + message;
+            }
+            CustomSkill cs = opt.get();
+            if (cs.getType() == CustomSkillType.PROMPT) {
+                return buildPromptSkillDirective(cs, message);
+            }
+            // COMMAND / WORKFLOW
+            return "You are in \"" + cs.getDisplayName() + "\" skill mode. Help the user run, inspect, and "
+                    + "manage this specific skill. The skill type is " + cs.getType() + ". To execute it, "
+                    + "call run_custom_skill(name=\"" + cs.getName() + "\"). To modify it, use "
+                    + "update_custom_skill. If the user asks for something unrelated, decline and tell them "
+                    + "to switch to General mode.\n\nUSER MESSAGE:\n" + message;
+        }
+
+        // Built-in skill → domain map (mirrors MODE DETECTION in SYSTEM_PROMPT)
+        String displayName;
+        String domain;
+        switch (trimmed) {
+            case "slack" -> { displayName = "Slack"; domain = "sending Slack messages and notifications"; }
+            case "telegram" -> { displayName = "Telegram"; domain = "sending Telegram messages and notifications"; }
+            case "gmail" -> { displayName = "Gmail"; domain = "sending emails via Gmail SMTP"; }
+            case "gmail-api" -> { displayName = "Gmail API"; domain = "reading, searching, and managing Gmail emails via the API"; }
+            case "smtp" -> { displayName = "SMTP"; domain = "sending emails via SMTP"; }
+            case "flirt" -> { displayName = "Wingman"; domain = "dating and flirting help"; }
+            case "web-search" -> { displayName = "Web Search"; domain = "web search tasks"; }
+            case "custom-skills" -> { displayName = "Custom Skills"; domain = "creating, listing, running, and managing custom skills"; }
+            default -> {
+                // Unknown built-in — generic directive using the raw identifier
+                displayName = trimmed;
+                domain = "the " + trimmed + " skill";
+            }
+        }
+        return "You are currently in " + displayName + " Mode. Focus exclusively on " + domain + ". "
+                + "If the user asks for something unrelated to this mode, politely decline and tell them to "
+                + "switch to General mode.\n\nUSER MESSAGE:\n" + message;
+    }
+
+    /**
+     * Compose a PROMPT custom skill directive, reusing the same shape as
+     * {@code CustomSkillService.runPromptSkill} so chat and the run_custom_skill
+     * tool behave consistently.
+     */
+    private String buildPromptSkillDirective(CustomSkill skill, String message) {
+        Map<String, Object> definition;
+        try {
+            definition = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(skill.getDefinitionJson(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            // Fall back to a plain directive if the JSON is malformed
+            return "[" + skill.getDisplayName() + " Mode]\n\nUSER MESSAGE:\n" + message;
+        }
+        String systemPrompt = (String) definition.get("systemPrompt");
+        String personality = (String) definition.get("personality");
+        String outputFormat = (String) definition.get("outputFormat");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[").append(skill.getDisplayName()).append(" Mode]\n\n");
+        if (systemPrompt != null) sb.append("INSTRUCTIONS: ").append(systemPrompt).append("\n\n");
+        if (personality != null) sb.append("PERSONALITY: ").append(personality).append("\n\n");
+        if (outputFormat != null) sb.append("OUTPUT FORMAT: ").append(outputFormat).append("\n\n");
+        sb.append("If the user's request is unrelated to the skill's instructions, decline and tell them to switch to General mode.\n\n");
+        sb.append("USER MESSAGE:\n").append(message);
+        return sb.toString();
     }
 
     /**

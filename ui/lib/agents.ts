@@ -9,6 +9,12 @@ export interface Agent {
   createdAt?: Date;
 }
 
+function resolveAgentBaseUrl(agent: Pick<Agent, 'url'>): string {
+  const override = process.env.AGENT_URL?.trim();
+  if (override) return override.replace(/\/+$/, '');
+  return agent.url.replace(/\/+$/, '');
+}
+
 export async function getAgents(): Promise<Agent[]> {
   const agents = await prisma.agent.findMany({
     orderBy: { createdAt: 'desc' },
@@ -50,7 +56,7 @@ export async function updateAgent(id: string, updates: Partial<Agent>): Promise<
 
 export async function checkAgentHealth(agent: Agent): Promise<boolean> {
   try {
-    const response = await fetch(`${agent.url}/health`, {
+    const response = await fetch(`${resolveAgentBaseUrl(agent)}/health`, {
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
@@ -62,7 +68,7 @@ export async function checkAgentHealth(agent: Agent): Promise<boolean> {
 // Sync executions from an agent to local database
 export async function syncAgentExecutions(agent: Agent): Promise<number> {
   try {
-    const response = await fetch(`${agent.url}/executions?limit=100`, {
+    const response = await fetch(`${resolveAgentBaseUrl(agent)}/executions?limit=100`, {
       headers: { Authorization: `Bearer ${agent.token}` },
       signal: AbortSignal.timeout(30000),
     });
@@ -111,7 +117,7 @@ export async function syncAgentExecutions(agent: Agent): Promise<number> {
 // Sync full execution details including steps
 export async function syncExecutionDetails(agent: Agent, executionId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${agent.url}/execution/${executionId}`, {
+    const response = await fetch(`${resolveAgentBaseUrl(agent)}/execution/${executionId}`, {
       headers: { Authorization: `Bearer ${agent.token}` },
       signal: AbortSignal.timeout(10000),
     });

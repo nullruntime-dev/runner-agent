@@ -1,3 +1,58 @@
+function getApiBase(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
+  return raw || '';
+}
+
+function getApiToken(): string {
+  return process.env.NEXT_PUBLIC_API_TOKEN?.trim() || '';
+}
+
+function buildApiUrl(uiPath: string): string {
+  const base = getApiBase();
+  if (!base) return uiPath;
+  // /api/agents/{id}/<sub> → map to backend paths
+  //   /api/agents → /api/agents (backend has the agents registry)
+  //   /api/agents/{id} → /api/agents/{id} (CRUD on the registry)
+  //   /api/agents/{id}/chat → /agent/chat
+  //   /api/agents/{id}/skills → /agent/skills
+  //   /api/agents/{id}/schedules → /agent/schedules
+  //   /api/agents/{id}/sessions → /agent/sessions
+  //   /api/agents/{id}/custom-skills → /agent/custom-skills
+  //   /api/agents/{id}/gmail → /agent/gmail
+  //   /api/agents/{id}/ai-config → /agent/ai-config
+  //   /api/agents/{id}/execution/{eid} → /execution/{eid}
+  //   /api/agents/{id}/wingman/export → /wingman/export
+  const m = uiPath.match(/^\/api\/agents\/[^/]+(\/.*)?$/);
+  if (m) {
+    const rest = m[1] || '';
+    if (rest.startsWith('/chat') || rest.startsWith('/skills')
+        || rest.startsWith('/schedules') || rest.startsWith('/sessions')
+        || rest.startsWith('/custom-skills') || rest.startsWith('/gmail')
+        || rest.startsWith('/ai-config')) {
+      return base + '/agent' + rest;
+    }
+    return base + rest;
+  }
+  if (uiPath === '/api/agents') return base + '/api/agents';
+  return base + uiPath;
+}
+
+async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const url = buildApiUrl(input);
+  const token = getApiToken();
+  const headers = new Headers(init.headers);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(url, { ...init, headers });
+}
+
+async function throwIfNotOk(res: Response, action: string): Promise<void> {
+  if (res.ok) return;
+  const body = await res.text().catch(() => '');
+  throw new Error(`${action} (${res.status} ${res.statusText})${body ? `: ${body}` : ''}`);
+}
+
 export interface Step {
   id: number;
   stepIndex: number;
@@ -48,31 +103,31 @@ export interface Agent {
 // Client-side API calls (through Next.js API routes)
 
 export async function getAgents(): Promise<Agent[]> {
-  const res = await fetch('/api/agents', { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch agents');
+  const res = await apiFetch('/api/agents', { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch agents');
   return res.json();
 }
 
 export async function addAgent(agent: { name: string; url: string; token: string }): Promise<Agent> {
-  const res = await fetch('/api/agents', {
+  const res = await apiFetch('/api/agents', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(agent),
   });
-  if (!res.ok) throw new Error('Failed to add agent');
+  await throwIfNotOk(res, 'Failed to add agent');
   return res.json();
 }
 
 export async function removeAgent(id: string): Promise<void> {
-  const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to remove agent');
+  const res = await apiFetch(`/api/agents/${id}`, { method: 'DELETE' });
+  await throwIfNotOk(res, 'Failed to remove agent');
 }
 
 export async function updateAgent(
   id: string,
   updates: { name?: string; url?: string; token?: string }
 ): Promise<Agent> {
-  const res = await fetch(`/api/agents/${id}`, {
+  const res = await apiFetch(`/api/agents/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -87,25 +142,25 @@ export async function updateAgent(
 export async function getExecutions(agentId?: string): Promise<Execution[]> {
   const url = agentId ? `/api/executions?agentId=${agentId}` : '/api/executions';
   const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch executions');
+  await throwIfNotOk(res, 'Failed to fetch executions');
   return res.json();
 }
 
 export async function getExecution(agentId: string, executionId: string): Promise<Execution> {
-  const res = await fetch(`/api/agents/${agentId}/executions/${executionId}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch execution');
+  const res = await apiFetch(`/api/agents/${agentId}/executions/${executionId}`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch execution');
   return res.json();
 }
 
 export async function getExecutionClient(agentId: string, executionId: string): Promise<Execution> {
-  const res = await fetch(`/api/agents/${agentId}/executions/${executionId}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch execution');
+  const res = await apiFetch(`/api/agents/${agentId}/executions/${executionId}`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch execution');
   return res.json();
 }
 
 export async function cancelExecution(agentId: string, executionId: string): Promise<void> {
-  const res = await fetch(`/api/agents/${agentId}/executions/${executionId}/cancel`, { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to cancel execution');
+  const res = await apiFetch(`/api/agents/${agentId}/executions/${executionId}/cancel`, { method: 'POST' });
+  await throwIfNotOk(res, 'Failed to cancel execution');
 }
 
 export function getLogsStreamUrl(agentId: string, executionId: string): string {
@@ -124,6 +179,8 @@ export interface ChatMessage {
 export interface ChatRequest {
   sessionId?: string;
   message: string;
+  /** Optional skill identifier, e.g. "flirt" or "custom:deploy-prod". */
+  skill?: string;
 }
 
 export interface ChatResponse {
@@ -134,19 +191,46 @@ export interface ChatResponse {
 export async function sendChatMessage(
   agentId: string,
   message: string,
-  sessionId?: string
+  sessionId?: string,
+  skill?: string
 ): Promise<ChatResponse> {
-  const res = await fetch(`/api/agents/${agentId}/chat`, {
+  const res = await apiFetch(`/api/agents/${agentId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, sessionId }),
+    body: JSON.stringify({ message, sessionId, skill }),
   });
-  if (!res.ok) throw new Error('Failed to send chat message');
+  await throwIfNotOk(res, 'Failed to send chat message');
   return res.json();
 }
 
-export function getChatStreamUrl(agentId: string, sessionId: string, message: string): string {
-  return `/api/agents/${agentId}/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`;
+/**
+ * Send a chat message with an attached file (image, text, or arbitrary binary).
+ * Uses multipart/form-data; do not set Content-Type manually (browser sets the boundary).
+ */
+export async function sendChatMessageWithFile(
+  agentId: string,
+  message: string,
+  file: File,
+  sessionId?: string,
+  skill?: string
+): Promise<ChatResponse> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('message', message);
+  if (sessionId) fd.append('sessionId', sessionId);
+  if (skill) fd.append('skill', skill);
+  const res = await apiFetch(`/api/agents/${agentId}/chat/file`, {
+    method: 'POST',
+    body: fd,
+  });
+  await throwIfNotOk(res, 'Failed to send chat message with file');
+  return res.json();
+}
+
+export function getChatStreamUrl(agentId: string, sessionId: string, message: string, skill?: string): string {
+  let url = `/api/agents/${agentId}/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(message)}`;
+  if (skill) url += `&skill=${encodeURIComponent(skill)}`;
+  return url;
 }
 
 // Skill types and functions
@@ -170,11 +254,13 @@ export interface Skill {
   configured: boolean;
   enabled: boolean;
   hidden?: boolean;
+  /** Saved config values (e.g. botToken, allowedUserIds). Populated when configured. */
+  config?: Record<string, string>;
 }
 
 export async function getSkills(agentId: string): Promise<Skill[]> {
-  const res = await fetch(`/api/agents/${agentId}/skills`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch skills');
+  const res = await apiFetch(`/api/agents/${agentId}/skills`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch skills');
   return res.json();
 }
 
@@ -184,7 +270,7 @@ export async function configureSkill(
   config: Record<string, string>,
   enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}/configure`, {
+  const res = await apiFetch(`/api/agents/${agentId}/skills/${skillName}/configure`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ config, enabled }),
@@ -196,7 +282,7 @@ export async function deactivateSkill(
   agentId: string,
   skillName: string
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}`, {
+  const res = await apiFetch(`/api/agents/${agentId}/skills/${skillName}`, {
     method: 'DELETE',
   });
   return res.json();
@@ -207,7 +293,7 @@ export async function toggleSkillVisibility(
   skillName: string,
   hidden: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/skills/${skillName}/visibility`, {
+  const res = await apiFetch(`/api/agents/${agentId}/skills/${skillName}/visibility`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hidden }),
@@ -231,13 +317,13 @@ export interface GmailAuthUrl {
 }
 
 export async function getGmailAuthStatus(agentId: string): Promise<GmailAuthStatus> {
-  const res = await fetch(`/api/agents/${agentId}/gmail/status`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch Gmail auth status');
+  const res = await apiFetch(`/api/agents/${agentId}/gmail/status`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch Gmail auth status');
   return res.json();
 }
 
 export async function getGmailAuthUrl(agentId: string): Promise<GmailAuthUrl> {
-  const res = await fetch(`/api/agents/${agentId}/gmail/auth-url`, { cache: 'no-store' });
+  const res = await apiFetch(`/api/agents/${agentId}/gmail/auth-url`, { cache: 'no-store' });
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.error || 'Failed to get Gmail auth URL');
@@ -246,8 +332,8 @@ export async function getGmailAuthUrl(agentId: string): Promise<GmailAuthUrl> {
 }
 
 export async function revokeGmailAuth(agentId: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`/api/agents/${agentId}/gmail/revoke`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to revoke Gmail auth');
+  const res = await apiFetch(`/api/agents/${agentId}/gmail/revoke`, { method: 'DELETE' });
+  await throwIfNotOk(res, 'Failed to revoke Gmail auth');
   return res.json();
 }
 
@@ -293,7 +379,7 @@ export interface RunCustomSkillRequest {
 
 export async function getCustomSkills(agentId: string): Promise<CustomSkill[]> {
   try {
-    const res = await fetch(`/api/agents/${agentId}/custom-skills`, { cache: 'no-store' });
+    const res = await apiFetch(`/api/agents/${agentId}/custom-skills`, { cache: 'no-store' });
     if (!res.ok) {
       console.error('Failed to fetch custom skills:', res.status, res.statusText);
       return []; // Return empty array instead of throwing
@@ -306,8 +392,8 @@ export async function getCustomSkills(agentId: string): Promise<CustomSkill[]> {
 }
 
 export async function getCustomSkill(agentId: string, name: string): Promise<CustomSkill> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch custom skill');
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch custom skill');
   return res.json();
 }
 
@@ -315,7 +401,7 @@ export async function createCustomSkill(
   agentId: string,
   skill: CreateCustomSkillRequest
 ): Promise<{ success: boolean; skill?: CustomSkill; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(skill),
@@ -328,7 +414,7 @@ export async function updateCustomSkill(
   name: string,
   updates: UpdateCustomSkillRequest
 ): Promise<{ success: boolean; skill?: CustomSkill; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -340,7 +426,7 @@ export async function deleteCustomSkill(
   agentId: string,
   name: string
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}`, {
     method: 'DELETE',
   });
   return res.json();
@@ -351,7 +437,7 @@ export async function toggleCustomSkill(
   name: string,
   enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/toggle`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}/toggle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -364,7 +450,7 @@ export async function toggleCustomSkillVisibility(
   name: string,
   hidden: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/visibility`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}/visibility`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hidden }),
@@ -377,7 +463,7 @@ export async function runCustomSkill(
   name: string,
   request?: RunCustomSkillRequest
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`/api/agents/${agentId}/custom-skills/${name}/run`, {
+  const res = await apiFetch(`/api/agents/${agentId}/custom-skills/${name}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request || {}),
@@ -431,7 +517,7 @@ export interface CreateScheduleRequest {
 
 export async function getScheduledTasks(agentId: string): Promise<ScheduledTask[]> {
   try {
-    const res = await fetch(`/api/agents/${agentId}/schedules`, { cache: 'no-store' });
+    const res = await apiFetch(`/api/agents/${agentId}/schedules`, { cache: 'no-store' });
     if (!res.ok) {
       console.error('Failed to fetch schedules:', res.status);
       return [];
@@ -447,7 +533,7 @@ export async function createScheduledTask(
   agentId: string,
   request: CreateScheduleRequest
 ): Promise<{ success: boolean; task?: ScheduledTask; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/schedules`, {
+  const res = await apiFetch(`/api/agents/${agentId}/schedules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
@@ -460,7 +546,7 @@ export async function toggleScheduledTask(
   scheduleId: number,
   enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}/toggle`, {
+  const res = await apiFetch(`/api/agents/${agentId}/schedules/${scheduleId}/toggle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -472,7 +558,7 @@ export async function runScheduledTaskNow(
   agentId: string,
   scheduleId: number
 ): Promise<{ success: boolean; result?: string; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}/run`, {
+  const res = await apiFetch(`/api/agents/${agentId}/schedules/${scheduleId}/run`, {
     method: 'POST',
   });
   return res.json();
@@ -482,7 +568,7 @@ export async function deleteScheduledTask(
   agentId: string,
   scheduleId: number
 ): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
+  const res = await apiFetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
     method: 'DELETE',
   });
   return res.json();
@@ -507,7 +593,7 @@ export async function updateScheduledTask(
   scheduleId: number,
   request: UpdateScheduleRequest
 ): Promise<{ success: boolean; task?: ScheduledTask; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
+  const res = await apiFetch(`/api/agents/${agentId}/schedules/${scheduleId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
@@ -538,7 +624,7 @@ export async function getChatSessions(
   limit: number = 50
 ): Promise<ChatSession[]> {
   try {
-    const res = await fetch(`/api/agents/${agentId}/sessions?limit=${limit}`, { cache: 'no-store' });
+    const res = await apiFetch(`/api/agents/${agentId}/sessions?limit=${limit}`, { cache: 'no-store' });
     if (!res.ok) {
       console.error('Failed to fetch chat sessions:', res.status);
       return [];
@@ -555,7 +641,7 @@ export async function getChatSession(
   sessionId: string
 ): Promise<ChatSession | null> {
   try {
-    const res = await fetch(`/api/agents/${agentId}/sessions/${sessionId}`, { cache: 'no-store' });
+    const res = await apiFetch(`/api/agents/${agentId}/sessions/${sessionId}`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return null;
       throw new Error('Failed to fetch chat session');
@@ -572,7 +658,7 @@ export async function deleteChatSession(
   sessionId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`/api/agents/${agentId}/sessions/${sessionId}`, {
+    const res = await apiFetch(`/api/agents/${agentId}/sessions/${sessionId}`, {
       method: 'DELETE',
     });
     return res.json();
@@ -609,8 +695,8 @@ export interface WingmanExport {
 }
 
 export async function exportWingmanHistory(agentId: string): Promise<WingmanExport> {
-  const res = await fetch(`/api/agents/${agentId}/wingman/export`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to export wingman history');
+  const res = await apiFetch(`/api/agents/${agentId}/wingman/export`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to export wingman history');
   return res.json();
 }
 
@@ -624,8 +710,8 @@ export interface AIProviderConfig {
 }
 
 export async function getAIConfig(agentId: string): Promise<AIProviderConfig> {
-  const res = await fetch(`/api/agents/${agentId}/ai-config`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch AI config');
+  const res = await apiFetch(`/api/agents/${agentId}/ai-config`, { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch AI config');
   return res.json();
 }
 
@@ -633,7 +719,7 @@ export async function updateAIConfig(
   agentId: string,
   config: AIProviderConfig
 ): Promise<{ success: boolean; config?: AIProviderConfig; message?: string; error?: string }> {
-  const res = await fetch(`/api/agents/${agentId}/ai-config`, {
+  const res = await apiFetch(`/api/agents/${agentId}/ai-config`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -653,8 +739,8 @@ export interface DatabaseStats {
 }
 
 export async function getDatabaseStats(): Promise<DatabaseStats> {
-  const res = await fetch('/api/database/stats', { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch database stats');
+  const res = await apiFetch('/api/database/stats', { cache: 'no-store' });
+  await throwIfNotOk(res, 'Failed to fetch database stats');
   return res.json();
 }
 
@@ -668,7 +754,7 @@ export async function importDatabase(jsonPayload: unknown): Promise<{
   message?: string;
   error?: string;
 }> {
-  const res = await fetch('/api/database/import', {
+  const res = await apiFetch('/api/database/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(jsonPayload),

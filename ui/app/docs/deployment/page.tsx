@@ -18,7 +18,7 @@ export default function DeploymentPage() {
         <li><code className="text-[#00fff2]">docker-compose.local.yml</code> — builds from source for local dev.</li>
       </ul>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Production (pre-built images)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Production (pre-built images)</h3>
       <CodeBlock language="bash">
 {`git clone https://github.com/nullruntime-dev/runner-agent.git
 cd runner-agent
@@ -30,14 +30,14 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml down`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Local development (build from source)</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Local development (build from source)</h3>
       <CodeBlock language="bash">
 {`docker compose -f docker-compose.local.yml up --build -d
 # rebuild after code changes:
 docker compose -f docker-compose.local.yml up --build -d`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Services</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Services</h3>
       <div className="overflow-x-auto mb-8">
         <table className="w-full text-sm">
           <thead>
@@ -53,7 +53,7 @@ docker compose -f docker-compose.local.yml up --build -d`}
               <td className="py-3 px-4"><code className="text-[#00fff2]">agent</code></td>
               <td className="py-3 px-4">8090</td>
               <td className="py-3 px-4"><code>nullruntimedev/griphook-agent</code></td>
-              <td className="py-3 px-4">Spring Boot backend, H2 DB persisted under <code>/app/data</code></td>
+              <td className="py-3 px-4">Spring Boot backend, PostgreSQL (shared <code>postgres</code> service)</td>
             </tr>
             <tr className="border-b border-[#1a1a1a]">
               <td className="py-3 px-4"><code className="text-[#00fff2]">ui</code></td>
@@ -75,13 +75,13 @@ docker compose -f docker-compose.local.yml up --build -d`}
       <h2 className="text-xl font-bold text-white mt-12 mb-4">Standalone JAR</h2>
       <p className="text-[#888] mb-4">Best for installing the agent as a host service. Requires Java 21+.</p>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Build</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Build</h3>
       <CodeBlock language="bash">
 {`./gradlew bootJar
 # Built JAR: build/libs/runner-agent-0.1.0-SNAPSHOT.jar`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Run</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Run</h3>
       <CodeBlock language="bash">
 {`# Minimal
 AGENT_TOKEN=your-strong-token \\
@@ -95,11 +95,13 @@ AGENT_ADK_PROVIDER=gemini \\
 AGENT_WORKING_DIR=/opt/workspace \\
 AGENT_DEFAULT_SHELL=/bin/bash \\
 AGENT_MAX_CONCURRENT=10 \\
-H2_CONSOLE_ENABLED=false \\
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner \\
+SPRING_DATASOURCE_USERNAME=runner \\
+SPRING_DATASOURCE_PASSWORD=runner \\
 java -jar build/libs/runner-agent-0.1.0-SNAPSHOT.jar`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Install Java 21</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Install Java 21</h3>
       <CodeBlock language="bash">
 {`# Ubuntu / Debian
 sudo apt update && sudo apt install -y openjdk-21-jre-headless
@@ -117,7 +119,7 @@ brew install openjdk@21`}
       {/* systemd */}
       <h2 className="text-xl font-bold text-white mt-12 mb-4">systemd service (agent)</h2>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Install the agent</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Install the agent</h3>
       <CodeBlock language="bash">
 {`sudo mkdir -p /opt/griphook-agent
 sudo cp build/libs/runner-agent-0.1.0-SNAPSHOT.jar /opt/griphook-agent/griphook-agent.jar
@@ -125,7 +127,7 @@ sudo useradd -r -s /bin/false griphook
 sudo chown -R griphook:griphook /opt/griphook-agent`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Unit file</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Unit file</h3>
       <CodeBlock language="ini">
 {`# /etc/systemd/system/griphook-agent.service
 [Unit]
@@ -142,12 +144,15 @@ RestartSec=5
 Environment=AGENT_TOKEN=your-strong-token
 Environment=GOOGLE_AI_API_KEY=your-google-ai-key
 Environment=AGENT_WORKING_DIR=/opt/griphook-agent/workspace
+Environment=SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner
+Environment=SPRING_DATASOURCE_USERNAME=runner
+Environment=SPRING_DATASOURCE_PASSWORD=runner
 
 [Install]
 WantedBy=multi-user.target`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">Enable and start</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">Enable and start</h3>
       <CodeBlock language="bash">
 {`sudo systemctl daemon-reload
 sudo systemctl enable griphook-agent
@@ -161,7 +166,7 @@ sudo journalctl -u griphook-agent -f`}
       <h2 className="text-xl font-bold text-white mt-12 mb-4">UI deployment (Next.js)</h2>
       <p className="text-[#888] mb-4">Run the Next.js UI as its own service if you&apos;re not using the UI container.</p>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3">Build</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3">Build</h3>
       <CodeBlock language="bash">
 {`cd ui
 npm install
@@ -170,7 +175,7 @@ npm run build
 npm start                 # production server on PORT (default 3000)`}
       </CodeBlock>
 
-      <h3 className="text-md font-medium text-[#ccc] mb-3 mt-6">UI systemd unit</h3>
+      <h3 className="text-base font-medium text-[#ccc] mb-3 mt-6">UI systemd unit</h3>
       <CodeBlock language="ini">
 {`# /etc/systemd/system/griphook-ui.service
 [Unit]
@@ -246,20 +251,14 @@ docker compose -f docker-compose.prod.yml ps`}
 
       <h2 className="text-xl font-bold text-white mt-12 mb-4">Persistent volumes</h2>
       <p className="text-[#888] mb-4">
-        Both containers should mount persistent volumes for their databases:
+        The Postgres database (in <code>docker-compose.postgres.yml</code>) and the UI&apos;s SQLite cache need persistent volumes:
       </p>
-      <CodeBlock language="yaml">
-{`services:
-  agent:
-    volumes:
-      - agent-data:/app/data
-  ui:
-    volumes:
-      - ui-data:/app/data
+      <CodeBlock language="bash">
+{`# Bring up the standalone Postgres (one-time, or after down -v)
+docker compose -f docker-compose.postgres.yml up -d
 
-volumes:
-  agent-data:
-  ui-data:`}
+# Then bring up the agents + UI
+docker compose -f docker-compose.local.yml up -d --build`}
       </CodeBlock>
     </div>
   );

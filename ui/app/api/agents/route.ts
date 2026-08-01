@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgents, addAgent, checkAgentHealth, syncAgentExecutions } from '@/lib/agents';
 
+function resolveBaseUrl(submittedUrl: string): string {
+  const override = process.env.AGENT_URL?.trim();
+  if (override) return override.replace(/\/+$/, '');
+  let normalized = submittedUrl.trim();
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = `http://${normalized}`;
+  }
+  return normalized.replace(/\/+$/, '');
+}
+
 export async function GET() {
   const agents = await getAgents();
 
@@ -33,35 +43,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate URL format
-    let normalizedUrl = url.trim();
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      normalizedUrl = `http://${normalizedUrl}`;
+    const resolvedUrl = resolveBaseUrl(url);
+    let storedUrl = url.trim();
+    if (!storedUrl.startsWith('http://') && !storedUrl.startsWith('https://')) {
+      storedUrl = `http://${storedUrl}`;
     }
-    // Remove trailing slash
-    normalizedUrl = normalizedUrl.replace(/\/$/, '');
+    // Catch the common typo `host.8090` instead of `host:8090` — without this
+    // the agent card displays a broken URL even though the runtime uses AGENT_URL.
+    const dotPortMatch = storedUrl.match(/^(https?:\/\/[^\/]+)\.(\d+)(\/.*)?$/i);
+    if (dotPortMatch) {
+      storedUrl = `${dotPortMatch[1]}:${dotPortMatch[2]}${dotPortMatch[3] || ''}`;
+    }
+    storedUrl = storedUrl.replace(/\/$/, '');
 
     // Test connection to agent
     try {
-      const healthResponse = await fetch(`${normalizedUrl}/health`, {
+      const healthResponse = await fetch(`${resolvedUrl}/health`, {
         signal: AbortSignal.timeout(5000),
       });
       if (!healthResponse.ok) {
         return NextResponse.json(
-          { error: 'Could not connect to agent: health check failed' },
+          { error: `Could not connect to agent: health check failed (${healthResponse.status})` },
           { status: 400 }
         );
       }
-    } catch {
+    } catch (err) {
       return NextResponse.json(
-        { error: 'Could not connect to agent: connection failed' },
+        { error: `Could not connect to agent at ${resolvedUrl}: ${err instanceof Error ? err.message : 'connection failed'}` },
         { status: 400 }
       );
     }
 
     // Test authentication
     try {
-      const authResponse = await fetch(`${normalizedUrl}/executions?limit=1`, {
+      const authResponse = await fetch(`${resolvedUrl}/executions?limit=1`, {
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(5000),
       });
@@ -71,14 +86,14 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } catch {
+    } catch (err) {
       return NextResponse.json(
-        { error: 'Could not verify authentication' },
+        { error: `Could not verify authentication: ${err instanceof Error ? err.message : 'connection failed'}` },
         { status: 400 }
       );
     }
 
-    const agent = await addAgent({ name, url: normalizedUrl, token });
+    const agent = await addAgent({ name, url: storedUrl, token });
 
     // Sync executions from the new agent
     await syncAgentExecutions(agent);

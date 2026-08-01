@@ -283,7 +283,7 @@ install_docker_method() {
     # Fix known typo in downloaded compose file (${\AG aaENT_MAX_CONCURRENT...})
     $SUDO sed -i 's/\${AG aaENT_MAX_CONCURRENT:-5}/${AGENT_MAX_CONCURRENT:-5}/g' docker-compose.yml 2>/dev/null || true
 
-    # Create .env file
+    # Create .env.bak file
     if [ ! -f ".env" ]; then
         log_info "Creating default configuration..."
 
@@ -294,7 +294,7 @@ install_docker_method() {
             log_warn "Default port 8090 is in use, using ${default_port} instead."
         fi
 
-        $SUDO tee .env > /dev/null << EOF
+        $SUDO tee .env.bak > /dev/null << EOF
 # GRIPHOOK Configuration
 # Generate a secure token: openssl rand -hex 32
 AGENT_TOKEN=change-me-to-secure-token
@@ -539,7 +539,7 @@ install_frontend() {
     cd "$UI_DIR"
     $SUDO npm install
 
-    # Create .env.local for UI
+    # Create .env.bak.local for UI
     if [ ! -f "${UI_DIR}/.env.local" ]; then
         $SUDO tee "${UI_DIR}/.env.local" > /dev/null << 'EOF'
 # GRIPHOOK UI Configuration
@@ -754,7 +754,7 @@ EOF
     log_success "Source installation complete"
 }
 
-# Create .env file
+# Create .env.bak file
 create_env_file() {
     if [ ! -f "${INSTALL_DIR}/.env" ]; then
         log_info "Creating default configuration..."
@@ -858,7 +858,7 @@ configure_env_interactive() {
         server_port="$suggested_port"
     fi
 
-    # Update the .env file
+    # Update the .env.bak file
     log_info "Updating configuration..."
 
     ENV_FILE="${INSTALL_DIR}/.env"
@@ -1093,8 +1093,8 @@ print_next_steps() {
     echo -e "  ${CYAN}Documentation:${NC} https://github.com/${GITHUB_REPO}"
     echo ""
 
-    # Show the agent token so the user can copy it (read back from .env so it
-    # works even when config was skipped because .env already existed).
+    # Show the agent token so the user can copy it (read back from .env.bak so it
+    # works even when config was skipped because .env.bak already existed).
     local env_file="${INSTALL_DIR}/.env"
     if [ -f "$env_file" ]; then
         local saved_token

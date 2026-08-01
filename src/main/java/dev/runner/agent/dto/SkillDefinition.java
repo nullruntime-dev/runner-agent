@@ -21,6 +21,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -36,6 +37,8 @@ public class SkillDefinition {
     private boolean configured;
     private boolean enabled;
     private boolean hidden;
+    /** Saved config values (e.g. botToken, allowedUserIds). Empty map when not configured. */
+    private Map<String, String> config;
 
     @Data
     @Builder

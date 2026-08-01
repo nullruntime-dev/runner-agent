@@ -10,8 +10,8 @@ export default function MigrationPage() {
       </p>
 
       <InfoBox type="warning" title="Always snapshot first">
-        Back up both databases (<code>ui/data/runner.db</code> and the agent&apos;s H2 files) before any
-        migration. Test in staging if possible. The agent H2 schema auto-evolves via{' '}
+        Back up both databases (<code>ui/data/runner.db</code> and the agent&apos;s PostgreSQL database) before any
+        migration. Test in staging if possible. The agent PostgreSQL schema auto-evolves via{' '}
         <code>ddl-auto: update</code>; the Control Center uses Prisma migrations.
       </InfoBox>
 
@@ -41,11 +41,12 @@ npm start           # or use a systemd unit (see Deployment docs)
       <CodeBlock language="bash">
 {`# On the OLD host
 sudo systemctl stop griphook-agent
-scp /opt/griphook-agent/agent-data.mv.db newhost:/opt/griphook-agent/
-scp /opt/griphook-agent/agent-data.trace.db newhost:/opt/griphook-agent/ 2>/dev/null || true
-# Plus your env / settings.json if applicable
+pg_dump -U runner -d runner -h localhost > /tmp/agent.sql
+scp /tmp/agent.sql newhost:/tmp/
 
 # On the NEW host — install the JAR and systemd unit (see Deployment)
+# Restore the database
+psql -U runner -d runner -h localhost < /tmp/agent.sql
 sudo systemctl start griphook-agent
 
 # Update the Control Center
@@ -76,7 +77,7 @@ sudo systemctl start griphook-agent
 cd runner-agent
 git pull origin main
 
-# Backend (rebuilds the JAR; H2 auto-migrates schema on start)
+# Backend (rebuilds the JAR; PostgreSQL auto-migrates schema on start)
 ./gradlew clean bootJar
 sudo systemctl restart griphook-agent
 
@@ -99,20 +100,21 @@ sudo systemctl restart griphook-ui    # or however you run the UI`}
       <h2 className="text-xl font-bold text-white mt-10 mb-4">Run two agents on the same host</h2>
       <p className="text-[#888] mb-4">
         Useful for testing blue/green, canary deploys, or running prod + staging on one box. Each
-        agent needs a different port, working directory, H2 file, and token.
+        agent needs a different port, working directory, and token. They share the same Postgres
+        database (the schema is per-tenant via the <code>agent</code> column on shared tables).
       </p>
       <CodeBlock language="bash">
 {`# Agent A on 8090
 SERVER_PORT=8090 \\
 AGENT_TOKEN=token-A \\
-SPRING_DATASOURCE_URL='jdbc:h2:file:./agent-data-a;AUTO_SERVER=TRUE' \\
+SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5432/runner' \\
 AGENT_WORKING_DIR=/opt/agent-a \\
 ./gradlew bootRun
 
 # Agent B on 8091
 SERVER_PORT=8091 \\
 AGENT_TOKEN=token-B \\
-SPRING_DATASOURCE_URL='jdbc:h2:file:./agent-data-b;AUTO_SERVER=TRUE' \\
+SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5432/runner' \\
 AGENT_WORKING_DIR=/opt/agent-b \\
 ./gradlew bootRun`}
       </CodeBlock>

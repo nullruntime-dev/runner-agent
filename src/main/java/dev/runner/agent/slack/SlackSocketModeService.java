@@ -221,7 +221,7 @@
                   String sessionId = "slack-" + channelId;
                   log.info("Calling agent.chat for sessionId={}", sessionId);
 
-                  AgentService.ChatResult result = agentService.chat(sessionId, text);
+                  AgentService.ChatResult result = agentService.chat(sessionId, text, null);
                   log.info("Agent returned response: length={}", result.response().length());
 
                   // Send response via response_url
@@ -242,7 +242,7 @@
           Thread.startVirtualThread(() -> {
               try {
                   String sessionId = "slack-" + channel;
-                  AgentService.ChatResult result = agentService.chat(sessionId, text);
+                  AgentService.ChatResult result = agentService.chat(sessionId, text, null);
 
                   // Send response via chat.postMessage
                   sendMessage(channel, result.response());

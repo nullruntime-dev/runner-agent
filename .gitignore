@@ -40,20 +40,25 @@ out/
 
 # === Next.js (Frontend) ===
 ui/node_modules/
+cli/node_modules/
+ui-next/node_modules/
+ui-next/dist/
+ui/.next/
 ui/.next/
 ui/out/
-ui/.env*.local
+ui/.env.development
 ui/.vercel
 ui/*.tsbuildinfo
 ui/next-env.d.ts
 
 # === Databases ===
-# H2 (Backend)
+# (Backend uses Postgres — no local files. UI uses SQLite below.)
+# Old H2 files may still be in dev checkouts; ignore them.
 *.mv.db
 *.trace.db
 agent-data.*
 
-# SQLite (Frontend)
+# SQLite (UI)
 ui/data/*.db
 ui/data/*.db-journal
 ui/data/*.db-wal

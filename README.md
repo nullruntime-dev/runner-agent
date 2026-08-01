@@ -448,14 +448,22 @@ Application properties (application.yml):
 
 ## Database
 
-The agent uses H2 embedded database in file mode. Data persists in `./agent-data.mv.db`.
+The agent uses **PostgreSQL** exclusively. The DB is brought up by a dedicated compose file:
 
-Access H2 console (no auth required):
+```bash
+docker compose -f docker-compose.postgres.yml up -d
 ```
-http://localhost:8090/h2-console
-JDBC URL: jdbc:h2:file:./agent-data
-Username: sa
-Password: (empty)
+
+Container: `runner-agent-postgres`, image `postgres:16-alpine`, port `5432` mapped to host. Credentials are hardcoded (`runner` / `runner` / `runner`) for local dev only. Data persists in the named volume `runner-agent-postgres-data`; only `down -v` deletes it.
+
+Agent compose files (`docker-compose.local.yml`, `docker-compose.prod.yml`) join the same external `runner-agent-net` network and connect via the service name: `jdbc:postgresql://postgres:5432/runner`.
+
+For local development outside Docker (e.g. running the backend in the IDE), the host-mapped port is used:
+
+```bash
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner
+export SPRING_DATASOURCE_USERNAME=runner
+export SPRING_DATASOURCE_PASSWORD=runner
 ```
 
 ---
@@ -478,8 +486,8 @@ A Next.js web interface is included in the `ui/` directory.
 cd ui
 
 # Configure environment
-cp .env.local.example .env.local
-# Edit .env.local with your backend URL and token:
+cp .env.bak.local.example .env.bak.local
+# Edit .env.bak.local with your backend URL and token:
 #   NEXT_PUBLIC_API_URL=http://localhost:8090
 #   NEXT_PUBLIC_API_TOKEN=your-secret-token
 
