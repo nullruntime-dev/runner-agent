@@ -21,8 +21,9 @@
     Skip the PostgreSQL db/user initialization + the manual-install
     instructions. The installer does NOT install PostgreSQL for you -
     install it separately (see the printed instructions). Use this switch
-    only if you have already set up Postgres + the runner/runner db/user
-    yourself, or if you configure SPRING_DATASOURCE_* in .env manually.
+    only if you have already set up Postgres + the app db/user
+    yourself, or if you configure SPRING_DATASOURCE_* in griphook-start.bat
+    manually.
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
@@ -246,11 +247,11 @@ function Install-Git {
 # -- PostgreSQL --------------------------------------------------------------
 # The backend is Postgres-only (see application.yml). The installer does NOT
 # install PostgreSQL for you - install it manually first (winget one-liner
-# below), then this installer creates the runner/runner db+user the app
-# defaults to (SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner,
-# _USERNAME=runner, _PASSWORD=runner). If psql is not on PATH when this
-# installer runs, it prints manual instructions + skips db init (the backend
-# service will fail to start until you install Postgres + re-run).
+# below), then this installer creates the app db+user the app uses
+# (defaults: db 'runner', user 'runner', password prompted - all editable).
+# If psql is not on PATH when this installer runs, it prints manual
+# instructions + skips db init (the backend service will fail to start
+# until you install Postgres + re-run).
 $RequiredPgVer = 16
 $PgSuperPassword = 'postgres'
 $PgAppDb    = 'runner'
@@ -276,23 +277,32 @@ function Write-PostgresInstructions {
     Write-Host ''
 }
 
-# If .env already exists with SPRING_DATASOURCE_* (e.g. user re-running the
-# installer, or hand-edited .env), import those into the script-scope vars so
-# Initialize-PostgresDb creates/uses the right db+user instead of defaults.
-function Import-PgCredsFromEnv {
-    param([string]$EnvFile)
-    if (-not (Test-Path $EnvFile)) { return }
-    foreach ($l in Get-Content $EnvFile) {
-        if ($l -match '^\s*SPRING_DATASOURCE_URL\s*=\s*(.+)$') {
-            $url = $matches[1].Trim()
-            # jdbc:postgresql://localhost:5432/<db>  -> extract <db>
+# If the backend launcher (griphook-start.bat) already exists from a previous
+# install, read its `set "X=Y"` lines into the script-scope vars so re-runs
+# default to whatever the user already chose. No .env file is used anymore -
+# all config is baked directly into the launcher .bat.
+function Import-CredsFromLauncher {
+    param([string]$LauncherPath)
+    if (-not (Test-Path $LauncherPath)) { return }
+    foreach ($l in Get-Content $LauncherPath) {
+        if ($l -match '^\s*set\s+"AGENT_TOKEN=(.*)"\s*$') {
+            $script:ExistingToken = $matches[1]
+        }
+        elseif ($l -match '^\s*set\s+"GOOGLE_AI_API_KEY=(.*)"\s*$') {
+            $script:ExistingApiKey = $matches[1]
+        }
+        elseif ($l -match '^\s*set\s+"SERVER_PORT=(.*)"\s*$') {
+            $script:ExistingPort = $matches[1]
+        }
+        elseif ($l -match '^\s*set\s+"SPRING_DATASOURCE_URL=(.*)"\s*$') {
+            $url = $matches[1]
             if ($url -match '/([^/]+)$') { $script:PgAppDb = $matches[1] }
         }
-        elseif ($l -match '^\s*SPRING_DATASOURCE_USERNAME\s*=\s*(.+)$') {
-            $script:PgAppUser = $matches[1].Trim()
+        elseif ($l -match '^\s*set\s+"SPRING_DATASOURCE_USERNAME=(.*)"\s*$') {
+            $script:PgAppUser = $matches[1]
         }
-        elseif ($l -match '^\s*SPRING_DATASOURCE_PASSWORD\s*=\s*(.+)$') {
-            $script:PgAppPass = $matches[1].Trim()
+        elseif ($l -match '^\s*set\s+"SPRING_DATASOURCE_PASSWORD=(.*)"\s*$') {
+            $script:PgAppPass = $matches[1]
         }
     }
 }
@@ -317,7 +327,7 @@ function Wait-PostgresReady {
 
 # Create the app db + user (idempotent). Only runs when psql is on PATH.
 # Uses the script-scope $PgAppDb/$PgAppUser/$PgAppPass/$PgSuperPassword vars
-# (defaults or overridden by Write-EnvFile prompts). Validates db/user names
+# (defaults or overridden by Prompt-Config prompts). Validates db/user names
 # as simple identifiers + escapes the password for SQL string literals.
 function Initialize-PostgresDb {
     $psql = Resolve-OnPath 'psql'
@@ -526,119 +536,85 @@ function New-AgentToken {
     return [BitConverter]::ToString($bytes).Replace('-', '').ToLower()
 }
 
-function Write-EnvFile {
+# Prompt for all config (token, apiKey, port, PG creds) into script-scope
+# vars. On re-runs, defaults come from the existing launcher .bat (imported
+# by Import-CredsFromLauncher). On first install, defaults are hardcoded.
+function Prompt-Config {
     param([string]$InstallDir)
 
-    $envPath = Join-Path $InstallDir '.env'
-
-    # PG prompt block - shown on first install AND on re-runs. Defaults come
-    # from script-scope vars seeded by Import-PgCredsFromEnv (existing .env
-    # values) or the hardcoded defaults if .env doesn't exist yet.
-    $showPg = {
-        Write-Host ''
-        Write-Host '4. PostgreSQL (the backend is Postgres-only)'
-        Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
-        Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
-        Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
-        Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
-        $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
-        if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
-        $script:PgSuperPassword = $pgSuper
-
-        $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
-        if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
-        $script:PgAppDb = $pgDb
-
-        $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
-        if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
-        $script:PgAppUser = $pgUser
-
-        $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
-        if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
-        $script:PgAppPass = $pgPass
-    }
-
-    if (Test-Path $envPath) {
-        Write-Info ".env already exists at $envPath - keeping token/apiKey/port"
-        Write-Host '   Re-prompting PostgreSQL credentials (defaults = current .env values).' -ForegroundColor DarkGray
-        & $showPg
-        # Rewrite just the SPRING_DATASOURCE_* lines in the existing file
-        # so we preserve AGENT_TOKEN / GOOGLE_AI_API_KEY / etc.
-        $pgUrl = "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${PgAppDb}"
-        $pgU   = "SPRING_DATASOURCE_USERNAME=${PgAppUser}"
-        $pgP   = "SPRING_DATASOURCE_PASSWORD=${PgAppPass}"
-        $out = @()
-        $sawUrl = $false; $sawU = $false; $sawP = $false
-        foreach ($l in Get-Content $envPath) {
-            if ($l -match '^\s*SPRING_DATASOURCE_URL\s*=') { $out += $pgUrl; $sawUrl = $true }
-            elseif ($l -match '^\s*SPRING_DATASOURCE_USERNAME\s*=') { $out += $pgU; $sawU = $true }
-            elseif ($l -match '^\s*SPRING_DATASOURCE_PASSWORD\s*=') { $out += $pgP; $sawP = $true }
-            else { $out += $l }
-        }
-        if (-not $sawUrl) { $out += $pgUrl }
-        if (-not $sawU)   { $out += $pgU }
-        if (-not $sawP)   { $out += $pgP }
-        Set-Content -Path $envPath -Value $out -Encoding ASCII
-        Write-Success "PostgreSQL credentials updated: ${envPath}"
-        return
-    }
+    $launcher = Join-Path $InstallDir 'griphook-start.bat'
+    $existing = Test-Path $launcher
 
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Cyan
     Write-Host '         Quick Configuration                ' -ForegroundColor Cyan
     Write-Host '============================================' -ForegroundColor Cyan
+    if ($existing) {
+        Write-Host '   (Re-run: defaults = current values in griphook-start.bat)' -ForegroundColor DarkGray
+    }
     Write-Host ''
+
     Write-Host '1. Google AI API Key ' -NoNewline
     Write-Host '(required for AI chat)' -ForegroundColor Red
     Write-Host '   Get your free key at: https://aistudio.google.com/apikey' -ForegroundColor DarkGray
-    $apiKey = Read-Host '   Enter your Google AI API Key (or blank to skip)'
+    $apiKeyDefault = if ($ExistingApiKey) { $ExistingApiKey } else { '' }
+    $apiKey = Read-Host "   Enter your Google AI API Key [${apiKeyDefault}]"
+    if ([string]::IsNullOrWhiteSpace($apiKey)) { $apiKey = $apiKeyDefault }
 
     Write-Host ''
     Write-Host '2. Agent Token (API authentication)'
     Write-Host '   Press Enter to auto-generate a secure token.' -ForegroundColor DarkGray
-    $token = Read-Host '   Enter Agent Token'
-    if ([string]::IsNullOrWhiteSpace($token)) {
-        $token = New-AgentToken
-        Write-Host "   Generated: $($token.Substring(0,16))..." -ForegroundColor Green
+    $tokenDefault = if ($ExistingToken) { $ExistingToken } else { '' }
+    if ($tokenDefault) {
+        $token = Read-Host "   Enter Agent Token [${tokenDefault}]"
+        if ([string]::IsNullOrWhiteSpace($token)) { $token = $tokenDefault }
+    } else {
+        $token = Read-Host '   Enter Agent Token'
+        if ([string]::IsNullOrWhiteSpace($token)) {
+            $token = New-AgentToken
+            Write-Host "   Generated: $($token.Substring(0,16))..." -ForegroundColor Green
+        }
     }
 
     Write-Host ''
     Write-Host '3. Server Port (Default: 8090)'
     Write-Host '   If the default is in use, we will auto-bump by +100 until a free port is found.' -ForegroundColor DarkGray
-    $port = Read-Host '   Enter Server Port [8090]'
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = '8090' }
+    $portDefault = if ($ExistingPort) { $ExistingPort } else { '8090' }
+    $port = Read-Host "   Enter Server Port [${portDefault}]"
+    if ([string]::IsNullOrWhiteSpace($port)) { $port = $portDefault }
     $portInt = [int]$port
     $suggestedPort = Find-FreePort -StartPort $portInt
     if ($suggestedPort -ne $portInt) {
         Write-Warn "Port $portInt is in use. Using $suggestedPort instead."
         $portInt = $suggestedPort
     }
-    $port = "$portInt"
+    $script:ServerPort = "$portInt"
 
-    & $showPg
+    Write-Host ''
+    Write-Host '4. PostgreSQL (the backend is Postgres-only)'
+    Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
+    Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
+    Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
+    Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
+    $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
+    if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
+    $script:PgSuperPassword = $pgSuper
 
-    $generatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm'
-    $tempDir = $env:TEMP
-    $lines = @(
-        "# GRIPHOOK Configuration (generated ${generatedAt})",
-        "AGENT_TOKEN=${token}",
-        "GOOGLE_AI_API_KEY=${apiKey}",
-        "",
-        "SERVER_PORT=${port}",
-        "AGENT_WORKING_DIR=${tempDir}",
-        "AGENT_DEFAULT_SHELL=cmd.exe",
-        "AGENT_MAX_CONCURRENT=5",
-        "",
-        "AGENT_ADK_MODEL=gemini-2.0-flash",
-        "AGENT_ADK_ENABLED=true",
-        "",
-        "# PostgreSQL (the backend defaults to these via application.yml)",
-        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${PgAppDb}",
-        "SPRING_DATASOURCE_USERNAME=${PgAppUser}",
-        "SPRING_DATASOURCE_PASSWORD=${PgAppPass}"
-    )
-    Set-Content -Path $envPath -Value $lines -Encoding ASCII
-    Write-Success "Configuration saved: ${envPath}"
+    $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
+    if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
+    $script:PgAppDb = $pgDb
+
+    $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
+    if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
+    $script:PgAppUser = $pgUser
+
+    $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
+    if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
+    $script:PgAppPass = $pgPass
+
+    # Stash for the launcher writer.
+    $script:CfgApiKey = $apiKey
+    $script:CfgToken  = $token
 }
 
 # -- Service wrappers (WinSW) ------------------------------------------------
@@ -647,12 +623,12 @@ function Write-EnvFile {
 # WinSW's exe+xml-same-basename convention is satisfied for both the backend
 # and the UI without shipping the 18 MB binary twice.
 #
-# Env-var handling: WinSW's <env> entries cache .env at install time, so
-# editing .env after install silently went stale. Instead the xml points at
-# a launcher batch script (griphook-start.bat / griphook-start-ui.bat) that
-# reads .env into the process environment on EVERY service start, then runs
-# the app. Editing .env + restarting the service picks up the new values
-# with no xml regeneration.
+# Env-var handling: NO .env file is used. All backend config (token, api
+# key, db creds, etc.) is baked directly into griphook-start.bat as
+# `set "X=Y"` lines by Write-BackendLauncher. To change config, edit the
+# .bat + Restart-Service Griphook. The UI launcher sets NODE_ENV/PORT
+# + runs `next start` (Next.js auto-loads ui/.env.local for its own
+# DATABASE_URL).
 function Install-WinSw {
     param([string]$SrcDir, [string]$InstallDir)
 
@@ -676,19 +652,31 @@ function Install-WinSw {
     Write-Success "WinSW binaries installed: $InstallDir"
 }
 
-# Generate the backend launcher batch script. Reads .env into the process
-# env (skipping # comment + blank lines), then runs the Spring Boot jar.
-# The java.exe path is baked in at install time (resolved from PATH).
+# Generate the backend launcher batch script. All config is baked directly
+# as `set "X=Y"` lines - NO .env file is used. To change config later, edit
+# this .bat + Restart-Service Griphook. The java.exe path is baked in at
+# install time (resolved from PATH).
 function Write-BackendLauncher {
     param([string]$InstallDir, [string]$JavaExe)
 
+    $tempDir = $env:TEMP
     $bat = @(
         '@echo off',
         'rem GRIPHOOK backend launcher (generated by install.ps1).',
-        'rem Loads .env into the process env, then runs the Spring Boot jar.',
-        'rem Editing .env + restarting the service picks up new values - no xml regen.',
+        'rem All config is baked in below - edit this file + Restart-Service',
+        'rem Griphook to change config. NO .env file is read.',
         'setlocal',
-        'for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%~dp0.env") do set "%%a=%%b"',
+        "set `"AGENT_TOKEN=$CfgToken`"",
+        "set `"GOOGLE_AI_API_KEY=$CfgApiKey`"",
+        "set `"SERVER_PORT=$ServerPort`"",
+        "set `"AGENT_WORKING_DIR=$tempDir`"",
+        'set "AGENT_DEFAULT_SHELL=cmd.exe"',
+        'set "AGENT_MAX_CONCURRENT=5"',
+        'set "AGENT_ADK_MODEL=gemini-2.0-flash"',
+        'set "AGENT_ADK_ENABLED=true"',
+        "set `"SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${PgAppDb}`"",
+        "set `"SPRING_DATASOURCE_USERNAME=$PgAppUser`"",
+        "set `"SPRING_DATASOURCE_PASSWORD=$PgAppPass`"",
         "`"$JavaExe`" -Xmx512m -jar `"%~dp0griphook-agent.jar`"",
         'endlocal'
     )
@@ -851,7 +839,7 @@ function Write-NextSteps {
     Write-Host '  Install dir: ' -NoNewline -ForegroundColor Cyan
     Write-Host $InstallDir
     Write-Host '  Config file: ' -NoNewline -ForegroundColor Cyan
-    Write-Host (Join-Path $InstallDir '.env')
+    Write-Host (Join-Path $InstallDir 'griphook-start.bat')
     Write-Host '  Logs:        ' -NoNewline -ForegroundColor Cyan
     Write-Host (Join-Path $InstallDir 'logs')
     Write-Host ''
@@ -882,21 +870,21 @@ function Write-NextSteps {
     }
     Write-Host ''
     Write-Host '  To edit configuration:' -ForegroundColor Cyan
-    Write-Host "    notepad $(Join-Path $InstallDir '.env')"
+    Write-Host "    notepad $(Join-Path $InstallDir 'griphook-start.bat')"
     Write-Host "    Restart-Service $BackendServiceName"
     Write-Host ''
     Write-Host "  Documentation: https://github.com/$GithubRepo" -ForegroundColor DarkGray
     Write-Host ''
 
-    # Show the agent token so the user can copy it (read back from .env so it
-    # works even when config was skipped because .env already existed).
-    $envFile = Join-Path $InstallDir '.env'
-    if (Test-Path $envFile) {
+    # Show the agent token so the user can copy it (read back from the
+    # launcher .bat where it was baked in).
+    $launcher = Join-Path $InstallDir 'griphook-start.bat'
+    if (Test-Path $launcher) {
         $savedToken = $null
         $savedPort  = $null
-        Get-Content $envFile | ForEach-Object {
-            if ($_ -match '^AGENT_TOKEN=(.*)$') { $savedToken = $matches[1] }
-            if ($_ -match '^SERVER_PORT=(.*)$') { $savedPort  = $matches[1] }
+        Get-Content $launcher | ForEach-Object {
+            if ($_ -match '^\s*set\s+"AGENT_TOKEN=(.*)"\s*$') { $savedToken = $matches[1] }
+            if ($_ -match '^\s*set\s+"SERVER_PORT=(.*)"\s*$') { $savedPort  = $matches[1] }
         }
         if ($savedToken) {
             Write-Host '  ============================================' -ForegroundColor Green
@@ -947,17 +935,15 @@ function Main {
         Build-Frontend -SrcDir $srcDir -InstallDir $InstallDir
     }
 
-    # If .env was pre-existing (re-run) or hand-edited, import its
-    # SPRING_DATASOURCE_* BEFORE Write-EnvFile so the PG prompts below
-    # default to whatever the user already set up.
-    Import-PgCredsFromEnv -EnvFile (Join-Path $InstallDir '.env')
+    # Import existing launcher .bat config (if re-run) so prompts default
+    # to the user's current values, then prompt for all config + write
+    # the launcher .bat. No .env file - all config baked into the .bat.
+    Import-CredsFromLauncher -LauncherPath (Join-Path $InstallDir 'griphook-start.bat')
+    Prompt-Config -InstallDir $InstallDir
 
-    Write-EnvFile -InstallDir $InstallDir
-
-    # Create the runner/runner db+user the backend defaults to. The installer
-    # does NOT install PostgreSQL itself - if psql is not on PATH, this prints
-    # manual install instructions + skips (the backend service will fail to
-    # start until you install Postgres + re-run). Skip with -SkipPostgres to
+    # Create the app db+user the backend uses. The installer does NOT
+    # install PostgreSQL itself - if psql is not on PATH, this prints
+    # manual install instructions + skips. Skip with -SkipPostgres to
     # suppress the instructions (you manage Postgres yourself).
     if (-not $SkipPostgres) { Initialize-PostgresDb }
 
