@@ -1,0 +1,36 @@
+<!--
+  WinSW configuration for the GRIPHOOK backend service.
+
+  Tokens replaced at install time by install.ps1 (Install-WinSw):
+    __JAVA_EXE__   -> absolute path to java.exe (resolved from PATH)
+    __ENV_VARS__   -> <env name="X" value="Y"/> lines parsed from .env
+
+  %BASE% expands to the directory holding this xml + the WinSW exe
+  (i.e. the install dir, e.g. C:\ProgramData\Griphook).
+-->
+<service>
+
+  <!-- Unique service id (registry key name) -->
+  <id>Griphook</id>
+  <!-- Display name shown in services.msc -->
+  <name>Griphook Service</name>
+  <description>GRIPHOOK AI-Powered Deployment Agent (backend)</description>
+
+  <!-- Java launcher (absolute path injected at install time) -->
+  <executable>__JAVA_EXE__</executable>
+  <arguments>-Xmx512m -jar "%BASE%\griphook-agent.jar"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+
+  <!-- Log rotation: 10 MB per file, keep 8 archives (sizeThreshold is in KB) -->
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+
+  <startmode>Automatic</startmode>
+
+  <!-- Environment variables from .env (AGENT_TOKEN, GOOGLE_AI_API_KEY, etc.) -->
+  __ENV_VARS__
+
+</service>

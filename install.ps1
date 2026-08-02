@@ -5,7 +5,7 @@
 .DESCRIPTION
     Installs GRIPHOOK (AI-Powered Deployment Agent) on Windows.
     Handles Java 21, Node.js, Git, builds backend + UI, and registers
-    Windows services via NSSM.
+    Windows services via WinSW.
 .PARAMETER Method
     Installation method: source (default, only supported method on Windows).
 .PARAMETER InstallDir
@@ -388,106 +388,175 @@ function Write-EnvFile {
     Write-Success "Configuration saved: ${envPath}"
 }
 
-# -- Service wrappers (NSSM) ------------------------------------------------
-# nssm.exe is committed at the repo root and copied in from the cloned source.
-function Install-Nssm {
+# -- Service wrappers (WinSW) ------------------------------------------------
+# A single WinSW binary (griphook-win-service.exe) is committed at the repo
+# root + copied into the install dir under two names — one per service — so
+# WinSW's exe+xml-same-basename convention is satisfied for both the backend
+# and the UI without shipping the 18 MB binary twice. The xml templates carry
+# __JAVA_EXE__ / __NODE_EXE__ / __ENV_VARS__ tokens replaced at install time.
+function Install-WinSw {
     param([string]$SrcDir, [string]$InstallDir)
 
-    $nssmExe = Join-Path $InstallDir 'nssm.exe'
-    $nssmSrc = Join-Path $SrcDir 'nssm.exe'
-    if (-not (Test-Path $nssmSrc)) {
-        throw "nssm.exe not found in cloned repo at $nssmSrc"
+    $logDir = Join-Path $InstallDir 'logs'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+    $srcExe = Join-Path $SrcDir 'griphook-win-service.exe'
+    if (-not (Test-Path $srcExe)) {
+        throw "WinSW exe not found in cloned repo at $srcExe"
     }
-    Copy-Item -Force $nssmSrc $nssmExe
-    Write-Success "NSSM installed: $nssmExe"
-    return $nssmExe
+
+    foreach ($base in @('griphook-win-service', 'griphook-win-service-ui')) {
+        $exeDst = Join-Path $InstallDir "$base.exe"
+        $xmlSrc = Join-Path $SrcDir "$base.xml"
+        $xmlDst = Join-Path $InstallDir "$base.xml"
+        if (-not (Test-Path $xmlSrc)) { throw "WinSW xml not found in cloned repo at $xmlSrc" }
+        # Copy the single source binary to both service names.
+        Copy-Item -Force $srcExe $exeDst
+        Copy-Item -Force $xmlSrc $xmlDst
+    }
+    Write-Success "WinSW binaries installed: $InstallDir"
+}
+
+# Build <env name="X" value="Y"/> lines from the install dir .env file.
+# Skips comments + blank lines. XML-escapes values.
+function ConvertTo-WinSwEnvLines {
+    param([string]$EnvFile)
+
+    if (-not (Test-Path $EnvFile)) { return @() }
+    $lines = Get-Content $EnvFile |
+        Where-Object { $_ -match '^\s*[^#\s][^=]*=' } |
+        ForEach-Object { $_.Trim() }
+    $out = @()
+    foreach ($l in $lines) {
+        $idx = $l.IndexOf('=')
+        if ($idx -le 0) { continue }
+        $k = $l.Substring(0, $idx).Trim()
+        $v = $l.Substring($idx + 1)
+        $vEsc = $v -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;'
+        $out += "  <env name=`"$k`" value=`"$vEsc`"/>"
+    }
+    return $out
+}
+
+# Render a WinSW xml template: replace __JAVA_EXE__ / __NODE_EXE__ / __ENV_VARS__.
+function Write-WinSwXml {
+    param(
+        [string]$TemplatePath,
+        [string]$OutPath,
+        [string]$JavaExe,
+        [string]$NodeExe,
+        [string[]]$EnvLines
+    )
+    $xml = Get-Content -Raw $TemplatePath
+    # Use literal .Replace() — -replace would treat $ in paths/values as
+    # backreferences and backslash as regex escape.
+    $envBlock = ($EnvLines -join "`n")
+    $xml = $xml.Replace('__JAVA_EXE__', $JavaExe)
+    $xml = $xml.Replace('__NODE_EXE__', $NodeExe)
+    $xml = $xml.Replace('__ENV_VARS__', $envBlock)
+    Set-Content -Path $OutPath -Value $xml -Encoding ASCII
 }
 
 function Remove-ExistingService {
-    param([string]$Nssm, [string]$Name)
+    param([string]$WinSwExe, [string]$Name)
 
     $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
     if ($null -ne $svc) {
         Write-Info "Removing existing service: $Name"
-        & $Nssm stop $Name confirm 2>&1 | Out-Null
-        & $Nssm remove $Name confirm 2>&1 | Out-Null
+        & $WinSwExe stop 2>&1 | Out-Null
+        & $WinSwExe uninstall 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
+    }
+}
+
+# Stop + delete any existing Griphook services WITHOUT needing the WinSW exe.
+# Called before Install-WinSw so a running service from a previous install
+# can't hold a lock on the exe (which would make Copy-Item fail with
+# "The process cannot access the file ... because it is being used by
+# another process"). Uses Stop-Service + sc.exe delete — both builtin.
+function Stop-ExistingServicesForReinstall {
+    foreach ($name in @($BackendServiceName, $FrontendServiceName)) {
+        $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if ($null -eq $svc) { continue }
+        Write-Info "Stopping existing service: $name"
+        try {
+            Stop-Service -Name $name -Force -ErrorAction Stop
+        } catch {
+            # Service may already be stopped; ignore.
+        }
+        # Wait for the process to release the lock on the WinSW exe.
+        $deadline = (Get-Date).AddSeconds(15)
+        while ((Get-Date) -lt $deadline) {
+            $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+            if ($null -eq $s) { break }
+            if ($s.Status -eq 'Stopped') { break }
+            Start-Sleep -Milliseconds 500
+        }
+        Write-Info "Deleting existing service: $name"
+        & sc.exe delete $name 2>&1 | Out-Null
         Start-Sleep -Seconds 1
     }
 }
 
 function New-BackendService {
-    param([string]$Nssm, [string]$InstallDir)
+    param([string]$InstallDir)
 
     $javaExe = Resolve-OnPath 'java'
     if (-not $javaExe) { throw "java not found on PATH when creating backend service" }
-    $jar     = Join-Path $InstallDir 'griphook-agent.jar'
-    $logDir  = Join-Path $InstallDir 'logs'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
-    Remove-ExistingService -Nssm $Nssm -Name $BackendServiceName
-
-    Write-Info "Creating service: $BackendServiceName"
-    & $Nssm install $BackendServiceName $javaExe "-Xmx512m" "-jar" $jar | Out-Null
-    & $Nssm set $BackendServiceName AppDirectory $InstallDir | Out-Null
-    & $Nssm set $BackendServiceName AppStdout (Join-Path $logDir 'griphook.out.log') | Out-Null
-    & $Nssm set $BackendServiceName AppStderr (Join-Path $logDir 'griphook.err.log') | Out-Null
-    & $Nssm set $BackendServiceName AppRotateFiles 1 | Out-Null
-    & $Nssm set $BackendServiceName AppRotateBytes 10485760 | Out-Null
-    & $Nssm set $BackendServiceName Start SERVICE_AUTO_START | Out-Null
-    & $Nssm set $BackendServiceName Description 'GRIPHOOK AI-Powered Deployment Agent (backend)' | Out-Null
-
-    # Load env vars from .env into the service environment
-    $envFile = Join-Path $InstallDir '.env'
-    if (Test-Path $envFile) {
-        $envLines = Get-Content $envFile |
-            Where-Object { $_ -match '^\s*[^#\s][^=]*=' } |
-            ForEach-Object { $_.Trim() }
-        if ($envLines) {
-            & $Nssm set $BackendServiceName AppEnvironmentExtra $envLines | Out-Null
-        }
+    if (-not (Test-Path (Join-Path $InstallDir 'griphook-agent.jar'))) {
+        throw "griphook-agent.jar not found in $InstallDir - did Build-Backend succeed?"
     }
 
+    $winswExe = Join-Path $InstallDir 'griphook-win-service.exe'
+    $xmlTpl   = Join-Path $InstallDir 'griphook-win-service.xml'
+    $envFile  = Join-Path $InstallDir '.env'
+    $envLines = ConvertTo-WinSwEnvLines -EnvFile $envFile
+
+    Write-WinSwXml -TemplatePath $xmlTpl -OutPath $xmlTpl `
+        -JavaExe $javaExe -NodeExe '' -EnvLines $envLines
+
+    Remove-ExistingService -WinSwExe $winswExe -Name $BackendServiceName
+
+    Write-Info "Creating service: $BackendServiceName"
+    & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for $BackendServiceName (exit $LASTEXITCODE)" }
     Write-Success "Backend service '$BackendServiceName' created"
 }
 
 function New-FrontendService {
-    param([string]$Nssm, [string]$InstallDir)
+    param([string]$InstallDir)
 
-    $uiDir = Join-Path $InstallDir 'ui'
+    $uiDir   = Join-Path $InstallDir 'ui'
     $nodeExe = Resolve-OnPath 'node'
     if (-not $nodeExe) { throw "node not found on PATH when creating frontend service" }
-    $logDir = Join-Path $InstallDir 'logs'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
-    # npm start invokes `next start`. We call node against the next binary
-    # so NSSM tracks the real process instead of an intermediate shell.
     $nextBin = Join-Path $uiDir 'node_modules\next\dist\bin\next'
     if (-not (Test-Path $nextBin)) {
         throw "Next.js binary not found at $nextBin - did 'npm install' succeed?"
     }
 
-    Remove-ExistingService -Nssm $Nssm -Name $FrontendServiceName
+    $winswExe = Join-Path $InstallDir 'griphook-win-service-ui.exe'
+    $xmlTpl   = Join-Path $InstallDir 'griphook-win-service-ui.xml'
+    $envFile  = Join-Path $InstallDir '.env'
+    $envLines = ConvertTo-WinSwEnvLines -EnvFile $envFile
+
+    Write-WinSwXml -TemplatePath $xmlTpl -OutPath $xmlTpl `
+        -JavaExe '' -NodeExe $nodeExe -EnvLines $envLines
+
+    Remove-ExistingService -WinSwExe $winswExe -Name $FrontendServiceName
 
     Write-Info "Creating service: $FrontendServiceName"
-    & $Nssm install $FrontendServiceName $nodeExe $nextBin 'start' '-p' '3000' | Out-Null
-    & $Nssm set $FrontendServiceName AppDirectory $uiDir | Out-Null
-    & $Nssm set $FrontendServiceName AppStdout (Join-Path $logDir 'griphook-ui.out.log') | Out-Null
-    & $Nssm set $FrontendServiceName AppStderr (Join-Path $logDir 'griphook-ui.err.log') | Out-Null
-    & $Nssm set $FrontendServiceName AppRotateFiles 1 | Out-Null
-    & $Nssm set $FrontendServiceName AppRotateBytes 10485760 | Out-Null
-    & $Nssm set $FrontendServiceName Start SERVICE_AUTO_START | Out-Null
-    & $Nssm set $FrontendServiceName Description 'GRIPHOOK UI Dashboard' | Out-Null
-    & $Nssm set $FrontendServiceName AppEnvironmentExtra 'NODE_ENV=production' 'PORT=3000' | Out-Null
-    & $Nssm set $FrontendServiceName DependOnService $BackendServiceName | Out-Null
-
+    & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for $FrontendServiceName (exit $LASTEXITCODE)" }
     Write-Success "Frontend service '$FrontendServiceName' created"
 }
 
 function Start-Services {
     Write-Info "Starting $BackendServiceName..."
     Start-Service -Name $BackendServiceName
-    Write-Info "Starting $FrontendServiceName..."
-    Start-Service -Name $FrontendServiceName
+    if (-not $SkipUI) {
+        Write-Info "Starting $FrontendServiceName..."
+        Start-Service -Name $FrontendServiceName
+    }
     Write-Success 'Services started'
 }
 
@@ -611,10 +680,13 @@ function Main {
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'
     } else {
-        $nssm = Install-Nssm -SrcDir $srcDir -InstallDir $InstallDir
-        New-BackendService  -Nssm $nssm -InstallDir $InstallDir
+        # Stop + delete any existing Griphook services BEFORE copying the
+        # WinSW exes, so a running service can't lock the file.
+        Stop-ExistingServicesForReinstall
+        Install-WinSw -SrcDir $srcDir -InstallDir $InstallDir
+        New-BackendService  -InstallDir $InstallDir
         if (-not $SkipUI) {
-            New-FrontendService -Nssm $nssm -InstallDir $InstallDir
+            New-FrontendService -InstallDir $InstallDir
         }
         Start-Services
     }
