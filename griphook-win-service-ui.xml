@@ -1,0 +1,36 @@
+<!--
+  WinSW configuration for the GRIPHOOK UI service.
+
+  Tokens replaced at install time by install.ps1 (Install-WinSw):
+    __NODE_EXE__   -> absolute path to node.exe (resolved from PATH)
+    __ENV_VARS__   -> <env name="X" value="Y"/> lines (usually empty for UI)
+
+  %BASE% expands to the directory holding this xml + the WinSW exe
+  (i.e. the install dir, e.g. C:\ProgramData\Griphook). The Next.js
+  binary lives under %BASE%\ui\node_modules\next\dist\bin\next.
+-->
+<service>
+
+  <id>GriphookUI</id>
+  <name>Griphook UI</name>
+  <description>GRIPHOOK UI Dashboard</description>
+
+  <executable>__NODE_EXE__</executable>
+  <arguments>"%BASE%\ui\node_modules\next\dist\bin\next" start -p 3000</arguments>
+  <workingdirectory>%BASE%\ui</workingdirectory>
+
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+
+  <startmode>Automatic</startmode>
+  <!-- UI starts after the backend so the dashboard can reach the API -->
+  <depend>Griphook</depend>
+
+  <env name="NODE_ENV" value="production"/>
+  <env name="PORT" value="3000"/>
+  __ENV_VARS__
+
+</service>

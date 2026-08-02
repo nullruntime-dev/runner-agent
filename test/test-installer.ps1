@@ -10,6 +10,10 @@
     4. docs/install.ps1 wrapper downloads + invokes a mock install.ps1
        with forwarded args (regression test for the Invoke-Expression /
        CmdletBinding bug)
+    5. install.ps1 param() is the first executable statement (no stray
+       lines like "$null = 0" before it — breaks -File parse)
+    6. install.ps1 Prisma data dir + db push exit-code check
+    7. WinSW xml templates parse + have required tokens/elements
 
   Run from repo root:
     powershell -ExecutionPolicy Bypass -File test\test-installer.ps1
@@ -115,7 +119,34 @@ if ($wrapText -match 'MOCK_INSTALLER_OK msg=hello') {
 
 Remove-Item -Force -ErrorAction SilentlyContinue $mock, $wrapTmp
 
-# ---- 5. install.ps1 Prisma regression --------------------------------------
+# ---- 5. install.ps1 param() placement regression ---------------------------
+Write-Host ''
+Write-Host '  install.ps1 param() must be first executable statement' -ForegroundColor DarkGray
+# PowerShell requires param() before any executable statement. A stray line
+# like "$null = 0" before param() turns [CmdletBinding()] param() into an
+# invalid expression -> "Unexpected attribute 'CmdletBinding'" parse error,
+# even when invoked via -File. Only #Requires, comments, and using may precede.
+$lines = Get-Content $installPs1
+$badBeforeParam = $false
+foreach ($l in $lines) {
+    $t = $l.Trim()
+    if ($t -eq '') { continue }
+    if ($t -match '^#') { continue }            # comment
+    if ($t -match '^#Requires') { continue }      # #Requires directive
+    if ($t -match '^using ') { continue }        # using statement
+    if ($t -match '^param\(' -or $t -match '^\[CmdletBinding') { break }  # reached param block
+    # Executable statement before param() — BUG
+    $badBeforeParam = $true
+    Write-Host "      bad line: $l" -ForegroundColor DarkGray
+    break
+}
+if ($badBeforeParam) {
+    Show-Fail "install.ps1 has executable statement before param() (parse breaks -File)"
+} else {
+    Show-Pass "install.ps1 param() is first executable statement"
+}
+
+# ---- 6. install.ps1 Prisma regression --------------------------------------
 Write-Host ''
 Write-Host '  install.ps1 Prisma data dir + exit check' -ForegroundColor DarkGray
 $ip = Get-Content -Raw $installPs1
@@ -128,12 +159,49 @@ if ($hasDataDir -and $hasExitCheck) {
     if (-not $hasExitCheck) { Show-Fail "install.ps1 missing prisma db push exit-code check" }
 }
 
+# ---- 7. WinSW xml templates ------------------------------------------------
+Write-Host ''
+Write-Host '  WinSW xml templates' -ForegroundColor DarkGray
+$winswXmls = @(
+    @{ file = Join-Path $repo 'griphook-win-service.xml';      java = $true;  node = $false },
+    @{ file = Join-Path $repo 'griphook-win-service-ui.xml';   java = $false; node = $true  }
+)
+foreach ($x in $winswXmls) {
+    $f = $x.file
+    if (-not (Test-Path $f)) { Show-Fail "missing WinSW xml: $f"; continue }
+    try {
+        [xml](Get-Content -Raw $f) | Out-Null
+        $raw = Get-Content -Raw $f
+        $hasId    = $raw -match '<id>(Griphook|GriphookUI)</id>'
+        $hasExec  = $raw -match '<executable>'
+        $hasLog   = $raw -match 'mode="roll-by-size"'
+        $hasDepend = $true
+        if ($x.node) { $hasDepend = $raw -match '<depend>Griphook</depend>' }
+        if ($x.java) { $hasDepend = $raw -notmatch '<depend>' }  # backend has no dependency
+        $tokenOk = $true
+        if ($x.java) { $tokenOk = $raw -match '__JAVA_EXE__' -and $raw -match '__ENV_VARS__' }
+        if ($x.node) { $tokenOk = $raw -match '__NODE_EXE__' -and $raw -match '__ENV_VARS__' }
+        if ($hasId -and $hasExec -and $hasLog -and $hasDepend -and $tokenOk) {
+            Show-Pass "WinSW xml valid: $(Split-Path -Leaf $f)"
+        } else {
+            Show-Fail "WinSW xml invalid/incomplete: $(Split-Path -Leaf $f)"
+            if (-not $hasId)     { Write-Host "      missing <id>" -ForegroundColor DarkGray }
+            if (-not $hasExec)   { Write-Host "      missing <executable>" -ForegroundColor DarkGray }
+            if (-not $hasLog)    { Write-Host "      missing roll-by-size log" -ForegroundColor DarkGray }
+            if (-not $hasDepend) { Write-Host "      missing/wrong <depend>" -ForegroundColor DarkGray }
+            if (-not $tokenOk)   { Write-Host "      missing __JAVA_EXE__/__NODE_EXE__/__ENV_VARS__ token" -ForegroundColor DarkGray }
+        }
+    } catch {
+        Show-Fail "WinSW xml parse error in $f : $($_.Exception.Message)"
+    }
+}
+
 # ---- Summary ---------------------------------------------------------------
 Write-Host ''
 if ($fail -eq 0) {
-    Write-Host "  ALL PASS  $pass/5" -ForegroundColor Green
+    Write-Host "  ALL PASS  $pass/7" -ForegroundColor Green
 } else {
-    Write-Host "  $fail FAILED  $pass/5 passed" -ForegroundColor Red
+    Write-Host "  $fail FAILED  $pass/7 passed" -ForegroundColor Red
 }
 Write-Host ''
 exit $fail
