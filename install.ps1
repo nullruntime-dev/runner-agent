@@ -96,33 +96,32 @@ function Assert-Winget {
 
 # Pre-flight: tell the user PostgreSQL is required BEFORE we install Java /
 # clone / build anything. The backend is Postgres-only (see application.yml).
-# If psql is not on PATH, print install instructions + abort so the user
-# doesn't waste a full build before discovering the db prerequisite.
+# We do NOT probe PATH for psql - on Windows the Postgres installer often
+# doesn't add bin/ to PATH even when PG is installed, so a PATH probe is
+# unreliable. Just print the requirement + ask the user to confirm.
 function Assert-Postgres {
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Yellow
-    Write-Host '  Prerequisite check: PostgreSQL required  ' -ForegroundColor Yellow
+    Write-Host '  Prerequisite: PostgreSQL required       ' -ForegroundColor Yellow
     Write-Host '============================================' -ForegroundColor Yellow
     Write-Host '  The backend is Postgres-only. You MUST have PostgreSQL' -ForegroundColor White
     Write-Host '  installed + running on localhost:' -ForegroundColor White
-    Write-Host "    port:     $PgPort (default)" -ForegroundColor DarkGray
-    Write-Host "    superuser: postgres" -ForegroundColor DarkGray
+    Write-Host "    port:      $PgPort (default)" -ForegroundColor DarkGray
+    Write-Host '    superuser:  postgres' -ForegroundColor DarkGray
     Write-Host '  The installer will create the app db + role the backend uses' -ForegroundColor DarkGray
     Write-Host "  (defaults: db '$PgAppDb', user '$PgAppUser', password prompted)." -ForegroundColor DarkGray
     Write-Host ''
-
-    $psql = Resolve-OnPath 'psql'
-    if ($psql) {
-        Write-Success "psql found: $psql"
-        return
-    }
-
-    Write-Err 'psql not found on PATH - PostgreSQL is not installed (or bin/ not on PATH).'
-    Write-PostgresInstructions
-    Write-Host '  Re-run install.bat after PostgreSQL is installed + a NEW terminal' -ForegroundColor Yellow
-    Write-Host '  is opened (so PATH refreshes).' -ForegroundColor Yellow
+    Write-Host '  If you do NOT have PostgreSQL installed yet:' -ForegroundColor Cyan
+    Write-Host '    winget install -e --id PostgreSQL.PostgreSQL.16' -ForegroundColor DarkGray
+    Write-Host '    (or download from https://www.postgresql.org/download/windows/)' -ForegroundColor DarkGray
     Write-Host ''
-    exit 1
+    $ans = Read-Host '  Have you installed PostgreSQL + is it running? (y/n)'
+    if ($ans -notmatch '^[yY]') {
+        Write-Err 'PostgreSQL not ready. Install it, then re-run install.bat.'
+        Write-Host ''
+        exit 1
+    }
+    Write-Success 'PostgreSQL confirmed by user'
 }
 
 # -- PATH refresh (after package installs) ----------------------------------
