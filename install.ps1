@@ -102,15 +102,29 @@ function Update-SessionPath {
 # -- Dependency installers --------------------------------------------------
 # Resolve an executable via where.exe (bypasses PowerShell's Get-Command cache,
 # which is stale after winget updates PATH mid-session).
-# NOTE: we do NOT check $LASTEXITCODE because it leaks in from prior pipelines
-# (e.g. winget install | Out-Null). We just inspect the output directly.
+# where.exe prints "INFO: Could not find files for the given pattern(s)." to
+# stderr on no-match, and with $ErrorActionPreference='Stop' that stderr line
+# triggers a NativeCommandError throw (2>$null does not reliably suppress it).
+# So we: drop EAP to Continue for the call, merge stderr into stdout, skip
+# INFO: banner lines, check $LASTEXITCODE, and Test-Path the candidate.
 function Resolve-OnPath {
     param([string]$Name)
-    $output = & where.exe $Name 2>$null
-    if (-not $output) { return $null }
-    $first = @($output)[0]
-    if ([string]::IsNullOrWhiteSpace($first)) { return $null }
-    return $first.Trim()
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & where.exe $Name 2>&1
+    } catch {
+        return $null
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($LASTEXITCODE -ne 0) { return $null }
+    foreach ($line in @($output)) {
+        $s = "$line".Trim()
+        if ($s -eq '' -or $s -match '^INFO:') { continue }
+        if (Test-Path $s) { return $s }
+    }
+    return $null
 }
 
 function Get-JavaMajorVersion {
