@@ -246,6 +246,27 @@ function Write-PostgresInstructions {
     Write-Host ''
 }
 
+# If .env already exists with SPRING_DATASOURCE_* (e.g. user re-running the
+# installer, or hand-edited .env), import those into the script-scope vars so
+# Initialize-PostgresDb creates/uses the right db+user instead of defaults.
+function Import-PgCredsFromEnv {
+    param([string]$EnvFile)
+    if (-not (Test-Path $EnvFile)) { return }
+    foreach ($l in Get-Content $EnvFile) {
+        if ($l -match '^\s*SPRING_DATASOURCE_URL\s*=\s*(.+)$') {
+            $url = $matches[1].Trim()
+            # jdbc:postgresql://localhost:5432/<db>  -> extract <db>
+            if ($url -match '/([^/]+)$') { $script:PgAppDb = $matches[1] }
+        }
+        elseif ($l -match '^\s*SPRING_DATASOURCE_USERNAME\s*=\s*(.+)$') {
+            $script:PgAppUser = $matches[1].Trim()
+        }
+        elseif ($l -match '^\s*SPRING_DATASOURCE_PASSWORD\s*=\s*(.+)$') {
+            $script:PgAppPass = $matches[1].Trim()
+        }
+    }
+}
+
 # Wait until Postgres accepts connections (psql probe).
 function Wait-PostgresReady {
     $psql = Resolve-OnPath 'psql'
@@ -265,7 +286,9 @@ function Wait-PostgresReady {
 }
 
 # Create the app db + user (idempotent). Only runs when psql is on PATH.
-# Uses a temp SQL file to avoid $$ escaping pain in PowerShell strings.
+# Uses the script-scope $PgAppDb/$PgAppUser/$PgAppPass/$PgSuperPassword vars
+# (defaults or overridden by Write-EnvFile prompts). Validates db/user names
+# as simple identifiers + escapes the password for SQL string literals.
 function Initialize-PostgresDb {
     $psql = Resolve-OnPath 'psql'
     if (-not $psql) {
@@ -273,28 +296,40 @@ function Initialize-PostgresDb {
         return
     }
 
+    # Validate db + user names as simple SQL identifiers to avoid injection
+    # through identifier positions (CREATE ROLE <name>, CREATE DATABASE <name>).
+    foreach ($n in @($PgAppDb, $PgAppUser)) {
+        if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+            throw "Invalid PostgreSQL identifier '$n' — use letters, digits, underscore, starting with a letter/underscore."
+        }
+    }
+    # Escape single quotes in the password for the SQL string literal.
+    $pgPassEsc = $PgAppPass -replace "'", "''"
+
     Write-Info 'Initializing PostgreSQL database...'
     Wait-PostgresReady
 
     $env:PGPASSWORD = $PgSuperPassword
     try {
-        # 1. Create role runner (idempotent via DO block). Single-quoted
-        #    here-string so $$ is literal (no PS interpolation).
+        # 1. Create the app role (idempotent via DO block). Single-quoted
+        #    here-string so $$ is literal (no PS interpolation); substitute
+        #    the validated identifiers + escaped password via .Replace().
         $roleSql = @'
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'runner') THEN
-    CREATE ROLE runner WITH LOGIN PASSWORD 'runner';
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '__PGUSER__') THEN
+    CREATE ROLE __PGUSER__ WITH LOGIN PASSWORD '__PGPASS__';
   END IF;
 END $$;
 '@
+        $roleSql = $roleSql.Replace('__PGUSER__', $PgAppUser).Replace('__PGPASS__', $pgPassEsc)
         $roleFile = Join-Path $env:TEMP 'griphook-pg-role.sql'
         Set-Content -Path $roleFile -Value $roleSql -Encoding ASCII
         & $psql -h localhost -p $PgPort -U postgres -f $roleFile 2>&1 |
             ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
         Remove-Item -Force $roleFile -ErrorAction SilentlyContinue
 
-        # 2. Create database runner if it doesn't exist (CREATE DATABASE
-        #    can't run inside a transaction/DO block, so probe + create).
+        # 2. Create database if it doesn't exist (CREATE DATABASE can't run
+        #    inside a transaction/DO block, so probe + create).
         $exists = (& $psql -h localhost -p $PgPort -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$PgAppDb'").Trim()
         if ($exists -ne '1') {
             & $psql -h localhost -p $PgPort -U postgres -c "CREATE DATABASE $PgAppDb OWNER $PgAppUser" 2>&1 |
@@ -485,6 +520,28 @@ function Write-EnvFile {
     }
     $port = "$portInt"
 
+    Write-Host ''
+    Write-Host '4. PostgreSQL (the backend is Postgres-only)'
+    Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
+    Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
+    Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
+    Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
+    $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
+    if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
+    $script:PgSuperPassword = $pgSuper
+
+    $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
+    if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
+    $script:PgAppDb = $pgDb
+
+    $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
+    if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
+    $script:PgAppUser = $pgUser
+
+    $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
+    if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
+    $script:PgAppPass = $pgPass
+
     $generatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm'
     $tempDir = $env:TEMP
     $lines = @(
@@ -498,7 +555,12 @@ function Write-EnvFile {
         "AGENT_MAX_CONCURRENT=5",
         "",
         "AGENT_ADK_MODEL=gemini-2.0-flash",
-        "AGENT_ADK_ENABLED=true"
+        "AGENT_ADK_ENABLED=true",
+        "",
+        "# PostgreSQL (the backend defaults to these via application.yml)",
+        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${pgDb}",
+        "SPRING_DATASOURCE_USERNAME=${pgUser}",
+        "SPRING_DATASOURCE_PASSWORD=${pgPass}"
     )
     Set-Content -Path $envPath -Value $lines -Encoding ASCII
     Write-Success "Configuration saved: ${envPath}"
@@ -722,7 +784,7 @@ function Write-NextSteps {
     Write-Host '  Database (PostgreSQL):' -ForegroundColor Cyan
     if (Resolve-OnPath 'psql') {
         Write-Host "    Connect:    jdbc:postgresql://localhost:$PgPort/$PgAppDb"
-        Write-Host "    App user:   $PgAppUser  (password: $PgAppUser)"
+        Write-Host "    App user:   $PgAppUser  (password: $PgAppPass)"
         Write-Host "    Superuser:  postgres   (password: $PgSuperPassword)"
     } else {
         Write-Host "    NOT installed - backend will fail to start until you install Postgres" -ForegroundColor Yellow
@@ -804,6 +866,10 @@ function Main {
     }
 
     Write-EnvFile -InstallDir $InstallDir
+
+    # If .env was pre-existing (re-run) or hand-edited, import its
+    # SPRING_DATASOURCE_* so Initialize-PostgresDb targets the right db+user.
+    Import-PgCredsFromEnv -EnvFile (Join-Path $InstallDir '.env')
 
     # Create the runner/runner db+user the backend defaults to. The installer
     # does NOT install PostgreSQL itself — if psql is not on PATH, this prints
