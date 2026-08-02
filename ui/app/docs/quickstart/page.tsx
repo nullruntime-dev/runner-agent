@@ -15,7 +15,8 @@ export default function QuickStartPage() {
         Docker (with the Compose plugin). Default ports: agent{' '}
         <code className="text-[#00fff2]">8090</code>, UI{' '}
         <code className="text-[#00fff2]">3000</code>. For local dev without Docker: Java 21+ and
-        Node.js 22+.
+        Node.js 22+. On Windows 10+ without Docker, use the native installer &mdash; see{' '}
+        <Link href="/docs/deployment" className="text-[#00fff2] hover:underline">Deployment &rarr; Windows installer</Link>.
       </InfoBox>
 
       {/* Option 1: Docker Compose */}

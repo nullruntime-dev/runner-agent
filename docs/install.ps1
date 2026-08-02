@@ -8,7 +8,7 @@
 #   irm https://griphook.dev/install.ps1 | iex
 #
 # Usage with args (elevated PowerShell):
-#   & { irm https://griphook.dev/install.psA1 | iex } -SkipUI
+#   & { irm https://griphook.dev/install.ps1 | iex } -SkipUI
 #
 # Via install.bat (forwards args here too):
 #   install.bat -SkipUI
