@@ -19,7 +19,7 @@
     page in the dashboard.
 .PARAMETER SkipPostgres
     Skip the PostgreSQL db/user initialization + the manual-install
-    instructions. The installer does NOT install PostgreSQL for you —
+    instructions. The installer does NOT install PostgreSQL for you -
     install it separately (see the printed instructions). Use this switch
     only if you have already set up Postgres + the runner/runner db/user
     yourself, or if you configure SPRING_DATASOURCE_* in .env manually.
@@ -215,7 +215,7 @@ function Install-Git {
 
 # -- PostgreSQL --------------------------------------------------------------
 # The backend is Postgres-only (see application.yml). The installer does NOT
-# install PostgreSQL for you — install it manually first (winget one-liner
+# install PostgreSQL for you - install it manually first (winget one-liner
 # below), then this installer creates the runner/runner db+user the app
 # defaults to (SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner,
 # _USERNAME=runner, _PASSWORD=runner). If psql is not on PATH when this
@@ -300,7 +300,7 @@ function Initialize-PostgresDb {
     # through identifier positions (CREATE ROLE <name>, CREATE DATABASE <name>).
     foreach ($n in @($PgAppDb, $PgAppUser)) {
         if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
-            throw "Invalid PostgreSQL identifier '$n' — use letters, digits, underscore, starting with a letter/underscore."
+            throw "Invalid PostgreSQL identifier '$n' - use letters, digits, underscore, starting with a letter/underscore."
         }
     }
     # Escape single quotes in the password for the SQL string literal.
@@ -311,16 +311,15 @@ function Initialize-PostgresDb {
 
     $env:PGPASSWORD = $PgSuperPassword
     try {
-        # 1. Create the app role (idempotent via DO block). Single-quoted
-        #    here-string so $$ is literal (no PS interpolation); substitute
-        #    the validated identifiers + escaped password via .Replace().
-        $roleSql = @'
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '__PGUSER__') THEN
-    CREATE ROLE __PGUSER__ WITH LOGIN PASSWORD '__PGPASS__';
+        # 1. Create the app role (idempotent via DO block). Regular
+        #    single-quoted multi-line string (NOT a here-string, which
+        #    needs CRLF and breaks when the wrapper downloads LF line
+        #    endings). $$ is literal in single-quoted strings.
+        $roleSql = 'DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''__PGUSER__'') THEN
+    CREATE ROLE __PGUSER__ WITH LOGIN PASSWORD ''__PGPASS__'';
   END IF;
-END $$;
-'@
+END $$;'
         $roleSql = $roleSql.Replace('__PGUSER__', $PgAppUser).Replace('__PGPASS__', $pgPassEsc)
         $roleFile = Join-Path $env:TEMP 'griphook-pg-role.sql'
         Set-Content -Path $roleFile -Value $roleSql -Encoding ASCII
@@ -419,7 +418,7 @@ function Build-Frontend {
         if ($npmExit -ne 0) { throw "npm install failed (exit $npmExit)" }
 
         # Write UI env before build. (Prisma 7 reads prisma.config.ts for the
-        # datasource URL — file:<cwd>/data/runner.db — so .env.local is only
+        # datasource URL - file:<cwd>/data/runner.db - so .env.local is only
         # for any code that reads process.env.DATABASE_URL directly.)
         Set-Content -Path (Join-Path $uiDest '.env.local') -Value 'DATABASE_URL="file:./data/runner.db"' -Encoding ASCII
 
@@ -568,7 +567,7 @@ function Write-EnvFile {
 
 # -- Service wrappers (WinSW) ------------------------------------------------
 # A single WinSW binary (griphook-win-service.exe) is committed at the repo
-# root + copied into the install dir under two names — one per service — so
+# root + copied into the install dir under two names - one per service - so
 # WinSW's exe+xml-same-basename convention is satisfied for both the backend
 # and the UI without shipping the 18 MB binary twice. The xml templates carry
 # __JAVA_EXE__ / __NODE_EXE__ / __ENV_VARS__ tokens replaced at install time.
@@ -626,7 +625,7 @@ function Write-WinSwXml {
         [string[]]$EnvLines
     )
     $xml = Get-Content -Raw $TemplatePath
-    # Use literal .Replace() — -replace would treat $ in paths/values as
+    # Use literal .Replace() - -replace would treat $ in paths/values as
     # backreferences and backslash as regex escape.
     $envBlock = ($EnvLines -join "`n")
     $xml = $xml.Replace('__JAVA_EXE__', $JavaExe)
@@ -651,7 +650,7 @@ function Remove-ExistingService {
 # Called before Install-WinSw so a running service from a previous install
 # can't hold a lock on the exe (which would make Copy-Item fail with
 # "The process cannot access the file ... because it is being used by
-# another process"). Uses Stop-Service + sc.exe delete — both builtin.
+# another process"). Uses Stop-Service + sc.exe delete - both builtin.
 function Stop-ExistingServicesForReinstall {
     foreach ($name in @($BackendServiceName, $FrontendServiceName)) {
         $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -872,7 +871,7 @@ function Main {
     Import-PgCredsFromEnv -EnvFile (Join-Path $InstallDir '.env')
 
     # Create the runner/runner db+user the backend defaults to. The installer
-    # does NOT install PostgreSQL itself — if psql is not on PATH, this prints
+    # does NOT install PostgreSQL itself - if psql is not on PATH, this prints
     # manual install instructions + skips (the backend service will fail to
     # start until you install Postgres + re-run). Skip with -SkipPostgres to
     # suppress the instructions (you manage Postgres yourself).
