@@ -1,9 +1,12 @@
 <!--
   WinSW configuration for the GRIPHOOK backend service.
 
-  Tokens replaced at install time by install.ps1 (Install-WinSw):
-    __JAVA_EXE__   -> absolute path to java.exe (resolved from PATH)
-    __ENV_VARS__   -> <env name="X" value="Y"/> lines parsed from .env
+  WinSW runs a launcher batch script (griphook-start.bat, generated at
+  install time by install.ps1 Write-BackendLauncher) instead of java.exe
+  directly. The launcher reads .env into the process environment on every
+  service start, so editing .env + restarting the service picks up the
+  new values WITHOUT regenerating this xml (the previous design cached
+  <env> entries at install time, which silently went stale).
 
   %BASE% expands to the directory holding this xml + the WinSW exe
   (i.e. the install dir, e.g. C:\ProgramData\Griphook).
@@ -16,9 +19,9 @@
   <name>Griphook Service</name>
   <description>GRIPHOOK AI-Powered Deployment Agent (backend)</description>
 
-  <!-- Java launcher (absolute path injected at install time) -->
-  <executable>__JAVA_EXE__</executable>
-  <arguments>-Xmx512m -jar "%BASE%\griphook-agent.jar"</arguments>
+  <!-- cmd.exe launches the wrapper batch script -->
+  <executable>cmd.exe</executable>
+  <arguments>/c "%BASE%\griphook-start.bat"</arguments>
   <workingdirectory>%BASE%</workingdirectory>
 
   <!-- Log rotation: 10 MB per file, keep 8 archives (sizeThreshold is in KB) -->
@@ -29,8 +32,5 @@
   </log>
 
   <startmode>Automatic</startmode>
-
-  <!-- Environment variables from .env (AGENT_TOKEN, GOOGLE_AI_API_KEY, etc.) -->
-  __ENV_VARS__
 
 </service>
