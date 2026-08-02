@@ -175,6 +175,7 @@ echo   %C_DIM%Options:%C_RESET%
 echo     %C_CYAN%(no options)%C_RESET%      Interactive install with sensible defaults
 echo     %C_CYAN%-SkipUI%C_RESET%          Agent-only: don't install the Control Center UI
 echo     %C_CYAN%-SkipServices%C_RESET%    Don't register Windows services
+echo     %C_CYAN%-SkipPostgres%C_RESET%    Don't install PostgreSQL (use existing)
 echo     %C_CYAN%-InstallDir DIR%C_RESET%  Custom install location (e.g. C:\Griphook)
 echo     %C_CYAN%-NoPause%C_RESET%         Don't pause for keypress (for automation / CI)
 echo     %C_CYAN%-Help%C_RESET%             Show this help and exit
