@@ -268,12 +268,25 @@ function Build-Frontend {
         $npmExit = $LASTEXITCODE
         if ($npmExit -ne 0) { throw "npm install failed (exit $npmExit)" }
 
-        # Write UI env before build (Prisma needs DATABASE_URL)
-        Set-Content -Path (Join-Path $uiDest '.env.local') -Value 'DATABASE_URL="file:./agents.db"' -Encoding ASCII
+        # Write UI env before build. (Prisma 7 reads prisma.config.ts for the
+        # datasource URL — file:<cwd>/data/runner.db — so .env.local is only
+        # for any code that reads process.env.DATABASE_URL directly.)
+        Set-Content -Path (Join-Path $uiDest '.env.local') -Value 'DATABASE_URL="file:./data/runner.db"' -Encoding ASCII
+
+        # SQLite won't create the parent dir; prisma.config.ts points at
+        # ./data/runner.db relative to CWD, so create data/ before db push.
+        $dataDir = Join-Path $uiDest 'data'
+        New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
         Write-Info 'Generating Prisma client...'
         & cmd.exe /c 'npx --yes prisma generate 2>&1' | Out-Null
-        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss 2>&1' | Out-Null
+        $genExit = $LASTEXITCODE
+        if ($genExit -ne 0) { throw "prisma generate failed (exit $genExit)" }
+
+        Write-Info 'Applying Prisma schema (db push)...'
+        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        $pushExit = $LASTEXITCODE
+        if ($pushExit -ne 0) { throw "prisma db push failed (exit $pushExit) - database not initialized" }
 
         Write-Info 'Building Next.js production bundle...'
         & cmd.exe /c 'npm run build 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }

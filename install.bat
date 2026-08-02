@@ -42,12 +42,15 @@ set "C_CYAN=%ESC%[96m"
 
 REM ---- Step printer -----------------------------------------------------------
 set "STEP=0"
+goto :main
+
 :printStep
 set /a STEP+=1
-echo %C_DIM%[%STEP%/%~2]%C_RESET% %C_BOLD%%~3%C_RESET%
+echo %C_DIM%[%STEP%/%~1]%C_RESET% %C_BOLD%%~2%C_RESET%
 goto :eof
 
 REM ---- Help -------------------------------------------------------------------
+:main
 if /I "%~1"=="-Help" goto :showHelp
 if /I "%~1"=="--Help" goto :showHelp
 if /I "%~1"=="/?" goto :showHelp

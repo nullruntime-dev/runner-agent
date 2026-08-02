@@ -24,6 +24,11 @@ JAR_NAME="runner-agent-${GRIPHOOK_VERSION}.jar"
 DOCKER_IMAGE_AGENT="nullruntimedev/griphook-agent:latest"
 DOCKER_IMAGE_UI="nullruntimedev/griphook-ui:latest"
 
+# cli-executor (standalone command-runner microservice)
+CLI_EXECUTOR_PORT="${CLI_EXECUTOR_PORT:-8010}"
+CLI_EXECUTOR_TOKEN="${CLI_EXECUTOR_TOKEN:-}"
+# Defaults per OS (set in install_cli_executor_method): /opt/cli-executor on Linux, /c/cli-executor on Windows
+
 # Required versions
 REQUIRED_JAVA_VERSION=21
 REQUIRED_NODE_VERSION=22
@@ -79,26 +84,33 @@ show_menu() {
     echo -e "  ${YELLOW}4)${NC} ${BOLD}Ubuntu Sandbox${NC}"
     echo -e "     ${DIM}Run in isolated Ubuntu container with systemd. Great for testing.${NC}"
     echo ""
+    echo -e "  ${BLUE}5)${NC} ${BOLD}CLI Executor${NC}"
+    echo -e "     ${DIM}Standalone command-runner microservice. Deploys on remote servers the agent reaches over HTTP. svcify on Linux, nssm.exe on Windows.${NC}"
+    echo ""
     echo -e "  ${RED}q)${NC} ${BOLD}Quit${NC}"
     echo ""
 
     while true; do
-        echo -n "Enter choice [1-4, q]: "
+        echo -n "Enter choice [1-5, q]: "
         read choice < /dev/tty
         case "$choice" in
             1) INSTALL_METHOD="docker"; break ;;
             2) INSTALL_METHOD="jar"; break ;;
             3) INSTALL_METHOD="source"; break ;;
             4) INSTALL_METHOD="sandbox"; break ;;
+            5) INSTALL_METHOD="cli-executor"; break ;;
             q|Q) echo "Cancelled."; exit 0 ;;
-            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, 4, or q.${NC}" ;;
+            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, 4, 5, or q.${NC}" ;;
         esac
     done
 }
 
 # Detect OS and package manager
 detect_os() {
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OS" == "Windows_NT" ]]; then
+        OS="windows"
+        PKG_MANAGER="unknown"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
         OS="macos"
         PKG_MANAGER="brew"
     elif [ -f /etc/os-release ]; then
@@ -139,6 +151,11 @@ detect_os() {
 
 # Check if running as root or can use sudo
 check_privileges() {
+    if [ "$OS" == "windows" ]; then
+        SUDO=""
+        log_info "Windows detected; run this script as Administrator for service creation"
+        return 0
+    fi
     if [ "$EUID" -eq 0 ]; then
         SUDO=""
     elif command -v sudo &> /dev/null; then
@@ -319,6 +336,15 @@ EOF
 
     # Interactive configuration
     configure_env_interactive
+
+    # Start the stack so the user doesn't have to. They pulled images + wrote
+    # .env; leaving containers stopped defeats "install".
+    log_info "Starting GRIPHOOK containers..."
+    if $SUDO docker compose up -d; then
+        log_success "Containers started"
+    else
+        log_warn "docker compose up -d failed; run it manually: cd ${INSTALL_DIR} && sudo docker compose up -d"
+    fi
 
     log_success "Docker installation complete"
 }
@@ -754,6 +780,213 @@ EOF
     log_success "Source installation complete"
 }
 
+# Install cli-executor (standalone command-runner microservice).
+# Downloads cli-executor.zip from GitHub releases and registers a service:
+#   - Linux: svcify (with systemd fallback)
+#   - Windows: nssm.exe (auto-downloaded if absent)
+#   - macOS: no service; user runs start.sh manually
+install_cli_executor_method() {
+    log_info "Installing cli-executor..."
+
+    # Check/install Java
+    if ! check_java; then
+        install_java
+    fi
+
+    # Resolve install dir per OS
+    local ce_dir
+    if [ "$OS" == "windows" ]; then
+        ce_dir="${CLI_EXECUTOR_INSTALL_DIR:-/c/cli-executor}"
+    else
+        ce_dir="${CLI_EXECUTOR_INSTALL_DIR:-/opt/cli-executor}"
+    fi
+
+    # Create install directory
+    if [ "$OS" == "windows" ]; then
+        mkdir -p "$ce_dir"
+    else
+        $SUDO mkdir -p "$ce_dir"
+    fi
+
+    # Download cli-executor.zip from GitHub releases
+    local zip_url="https://github.com/${GITHUB_REPO}/releases/latest/download/cli-executor.zip"
+    local tmp_zip="/tmp/cli-executor.zip"
+    log_info "Downloading cli-executor from releases..."
+    if curl -fsSL -o "$tmp_zip" "$zip_url"; then
+        if command -v unzip &> /dev/null; then
+            if [ "$OS" == "windows" ]; then
+                unzip -o "$tmp_zip" -d "$ce_dir"
+            else
+                $SUDO unzip -o "$tmp_zip" -d "$ce_dir"
+            fi
+        elif [ "$OS" == "windows" ] && command -v powershell &> /dev/null; then
+            local win_tmp win_ce
+            win_tmp=$(cygpath -w "$tmp_zip" 2>/dev/null || echo "$tmp_zip")
+            win_ce=$(cygpath -w "$ce_dir" 2>/dev/null || echo "$ce_dir")
+            powershell -NoProfile -Command "Expand-Archive -Force -Path '$win_tmp' -DestinationPath '$win_ce'"
+        else
+            log_error "unzip not found; install unzip and re-run"
+            exit 1
+        fi
+        rm -f "$tmp_zip"
+        # Normalize jar name
+        if [ "$OS" == "windows" ]; then
+            mv "$ce_dir"/*.jar "$ce_dir/cli-executor.jar" 2>/dev/null || true
+        else
+            $SUDO mv "$ce_dir"/*.jar "$ce_dir/cli-executor.jar" 2>/dev/null || true
+        fi
+        log_success "Downloaded cli-executor.jar"
+    else
+        log_error "Could not download cli-executor from GitHub releases"
+        log_info "Build it yourself: cd cli-executor && ./gradlew bootJar"
+        exit 1
+    fi
+
+    # Token: explicit > existing .env > auto-generate
+    local ce_token="${CLI_EXECUTOR_TOKEN:-}"
+    if [ -f "${ce_dir}/.env" ]; then
+        ce_token=$(grep -E '^SPRING_APPLICATION_TOKEN=' "${ce_dir}/.env" 2>/dev/null | cut -d'=' -f2-)
+    fi
+    if [ -z "$ce_token" ]; then
+        if command -v openssl &> /dev/null; then
+            ce_token=$(openssl rand -hex 24)
+        else
+            ce_token=$(head -c 24 /dev/urandom | xxd -p | tr -d '\n')
+        fi
+    fi
+
+    # Create .env
+    if [ ! -f "${ce_dir}/.env" ]; then
+        if [ "$OS" == "windows" ]; then
+            printf 'SPRING_APPLICATION_TOKEN=%s\nSERVER_PORT=%s\n' "$ce_token" "$CLI_EXECUTOR_PORT" > "${ce_dir}/.env"
+        else
+            $SUDO tee "${ce_dir}/.env" > /dev/null << EOF
+SPRING_APPLICATION_TOKEN=${ce_token}
+SERVER_PORT=${CLI_EXECUTOR_PORT}
+EOF
+        fi
+        log_success "Created ${ce_dir}/.env"
+    fi
+
+    # Create start script
+    if [ "$OS" == "windows" ]; then
+        cat > "${ce_dir}/start.bat" << 'EOF'
+@echo off
+cd /d "%~dp0"
+for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"
+java -jar cli-executor.jar
+EOF
+    else
+        $SUDO tee "${ce_dir}/start.sh" > /dev/null << 'EOF'
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+set -a
+source .env
+set +a
+exec java -jar cli-executor.jar
+EOF
+        $SUDO chmod +x "${ce_dir}/start.sh"
+    fi
+
+    # Register service
+    case "$OS" in
+        windows) create_cli_executor_service_windows "$ce_dir" "$ce_token" ;;
+        macos)   log_warn "svcify is Linux only; on macOS run ${ce_dir}/start.sh manually" ;;
+        *)       create_cli_executor_service_linux "$ce_dir" ;;
+    esac
+
+    # Stash for print_next_steps (read back regardless of how we got it)
+    CLI_EXECUTOR_DIR_OUT="$ce_dir"
+    CLI_EXECUTOR_TOKEN_OUT="$ce_token"
+
+    log_success "cli-executor installation complete"
+}
+
+# Create cli-executor service with svcify (Linux)
+create_cli_executor_service_linux() {
+    local ce_dir="$1"
+    if ! install_svcify; then
+        log_warn "Skipping service creation - svcify not available"
+        return
+    fi
+    if $SUDO svcify create cli-executor \
+        --exec "${ce_dir}/start.sh" \
+        --workdir "${ce_dir}" \
+        --restart always \
+        --description "GRIPHOOK CLI Executor"; then
+        log_success "Created service with svcify: cli-executor"
+    else
+        log_warn "svcify failed, falling back to systemd"
+        $SUDO tee /etc/systemd/system/cli-executor.service > /dev/null << EOF
+[Unit]
+Description=GRIPHOOK CLI Executor
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${ce_dir}
+ExecStart=${ce_dir}/start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        $SUDO systemctl daemon-reload
+        log_success "Created systemd service: cli-executor.service"
+    fi
+}
+
+# Create cli-executor service with nssm.exe (Windows). Auto-downloads nssm if missing.
+create_cli_executor_service_windows() {
+    local ce_dir="$1"
+    local ce_token="$2"
+
+    # Locate nssm.exe
+    local nssm_cmd=""
+    if command -v nssm &> /dev/null; then
+        nssm_cmd="nssm"
+    elif [ -x "${ce_dir}/nssm.exe" ]; then
+        nssm_cmd="${ce_dir}/nssm.exe"
+    else
+        log_info "Downloading nssm.exe..."
+        local nssm_url="https://nssm.cc/release/nssm-2.24.zip"
+        if curl -fsSL -o /tmp/nssm.zip "$nssm_url"; then
+            local nssm_extract="/tmp/nssm-extract"
+            if command -v unzip &> /dev/null; then
+                unzip -o /tmp/nssm.zip -d "$nssm_extract"
+            elif command -v powershell &> /dev/null; then
+                local win_zip win_ex
+                win_zip=$(cygpath -w /tmp/nssm.zip 2>/dev/null || echo "C:\\Windows\\Temp\\nssm.zip")
+                win_ex=$(cygpath -w "$nssm_extract" 2>/dev/null || echo "C:\\Windows\\Temp\\nssm-extract")
+                powershell -NoProfile -Command "Expand-Archive -Force -Path '$win_zip' -DestinationPath '$win_ex'"
+            fi
+            cp "$nssm_extract"/nssm-2.24/win64/nssm.exe "${ce_dir}/nssm.exe" 2>/dev/null || \
+              cp "$nssm_extract"/*/win64/nssm.exe "${ce_dir}/nssm.exe" 2>/dev/null || true
+            rm -rf /tmp/nssm.zip "$nssm_extract"
+            [ -x "${ce_dir}/nssm.exe" ] && nssm_cmd="${ce_dir}/nssm.exe"
+        fi
+    fi
+
+    if [ -z "$nssm_cmd" ]; then
+        log_error "nssm.exe not available. Install with: choco install nssm"
+        log_info "Then run manually: ${ce_dir}\\start.bat"
+        return
+    fi
+
+    # Convert Git Bash path to Windows path for nssm
+    local win_dir win_jar
+    win_dir=$(cygpath -w "$ce_dir" 2>/dev/null || echo "C:\\cli-executor")
+    win_jar="${win_dir}\\cli-executor.jar"
+
+    "$nssm_cmd" install cli-executor java -jar "$win_jar"
+    "$nssm_cmd" set cli-executor AppDirectory "$win_dir"
+    "$nssm_cmd" set cli-executor AppEnvironmentExtra "SPRING_APPLICATION_TOKEN=${ce_token}" "SERVER_PORT=${CLI_EXECUTOR_PORT}"
+    "$nssm_cmd" set cli-executor Start SERVICE_AUTO_START
+    "$nssm_cmd" start cli-executor
+    log_success "Created Windows service: cli-executor"
+}
+
 # Create .env.bak file
 create_env_file() {
     if [ ! -f "${INSTALL_DIR}/.env" ]; then
@@ -997,11 +1230,12 @@ print_next_steps() {
 
     case "$INSTALL_METHOD" in
         docker)
-            echo -e "  ${CYAN}1.${NC} Configure your API keys:"
+            echo -e "  ${CYAN}1.${NC} Containers are already running. Edit config and restart to apply:"
             echo -e "     ${YELLOW}sudo nano ${INSTALL_DIR}/.env${NC}"
-            echo ""
-            echo -e "  ${CYAN}2.${NC} Start the services:"
             echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose up -d${NC}"
+            echo ""
+            echo -e "  ${CYAN}2.${NC} Check status:"
+            echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose ps${NC}"
             echo ""
             echo -e "  ${CYAN}3.${NC} View logs:"
             echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose logs -f${NC}"
@@ -1087,6 +1321,48 @@ print_next_steps() {
             echo -e "     ${YELLOW}http://localhost:3000${NC}  (UI)"
             echo -e "     ${YELLOW}http://localhost:8090${NC}  (API)"
             ;;
+        cli-executor)
+            echo -e "  ${CYAN}cli-executor${NC} runs on port ${CLI_EXECUTOR_PORT} (default 8010)."
+            echo ""
+            if [ "$OS" == "windows" ]; then
+                echo -e "  ${CYAN}1.${NC} Start / manage the service (nssm):"
+                echo -e "     ${YELLOW}nssm start cli-executor${NC}      # start"
+                echo -e "     ${YELLOW}nssm stop cli-executor${NC}       # stop"
+                echo -e "     ${YELLOW}nssm restart cli-executor${NC}    # restart"
+                echo -e "     ${YELLOW}nssm status cli-executor${NC}     # status"
+                echo ""
+                echo -e "  ${CYAN}2.${NC} Or run manually:"
+                echo -e "     ${YELLOW}${CLI_EXECUTOR_DIR_OUT}\\start.bat${NC}"
+            elif command -v svcify &> /dev/null; then
+                echo -e "  ${CYAN}1.${NC} Start / manage the service (svcify):"
+                echo -e "     ${YELLOW}sudo svcify start cli-executor${NC}"
+                echo -e "     ${YELLOW}sudo svcify enable cli-executor${NC}   # auto-start on boot"
+                echo ""
+                echo -e "  ${CYAN}2.${NC} Or run manually:"
+                echo -e "     ${YELLOW}${CLI_EXECUTOR_DIR_OUT}/start.sh${NC}"
+            elif [ -f /etc/systemd/system/cli-executor.service ]; then
+                echo -e "  ${CYAN}1.${NC} Start / manage the service (systemd):"
+                echo -e "     ${YELLOW}sudo systemctl start cli-executor${NC}"
+                echo -e "     ${YELLOW}sudo systemctl enable cli-executor${NC}"
+                echo ""
+                echo -e "  ${CYAN}2.${NC} Or run manually:"
+                echo -e "     ${YELLOW}${CLI_EXECUTOR_DIR_OUT}/start.sh${NC}"
+            else
+                echo -e "  ${CYAN}1.${NC} Run manually:"
+                echo -e "     ${YELLOW}${CLI_EXECUTOR_DIR_OUT}/start.sh${NC}"
+            fi
+            echo ""
+            echo -e "  ${CYAN}3.${NC} Health check:"
+            echo -e "     ${YELLOW}curl http://localhost:${CLI_EXECUTOR_PORT}/executor/health${NC}"
+            echo -e "     ${DIM}(expect: OK)${NC}"
+            echo ""
+            echo -e "  ${CYAN}4.${NC} Call it (token in request body, not a header):"
+            echo -e "     ${YELLOW}curl -X POST http://localhost:${CLI_EXECUTOR_PORT}/executor/run \\${NC}"
+            echo -e "       ${YELLOW}-H 'content-type: application/json' \\${NC}"
+            echo -e "       ${YELLOW}-d '{\"commands\":[\"uptime\"],\"token\":\"<your-token>\"}'${NC}"
+            echo ""
+            echo -e "  ${CYAN}Docs:${NC} https://github.com/${GITHUB_REPO}#cli-executor"
+            ;;
     esac
 
     echo ""
@@ -1095,6 +1371,25 @@ print_next_steps() {
 
     # Show the agent token so the user can copy it (read back from .env.bak so it
     # works even when config was skipped because .env.bak already existed).
+    if [ "$INSTALL_METHOD" == "cli-executor" ]; then
+        if [ -n "${CLI_EXECUTOR_TOKEN_OUT:-}" ]; then
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo -e "${GREEN}         Your CLI Executor Token           ${NC}"
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo ""
+            echo -e "  ${CYAN}SPRING_APPLICATION_TOKEN:${NC} ${YELLOW}${CLI_EXECUTOR_TOKEN_OUT}${NC}"
+            echo ""
+            echo -e "  ${DIM}Send this token in the POST /executor/run body (not a header).${NC}"
+            echo -e "  ${DIM}Both runner-agent's skill body and cli-executor must share it.${NC}"
+            echo ""
+            echo -e "  ${DIM}Example:${NC}"
+            echo -e "  ${YELLOW}curl -X POST http://localhost:${CLI_EXECUTOR_PORT}/executor/run \\${NC}"
+            echo -e "    ${YELLOW}-H 'content-type: application/json' \\${NC}"
+            echo -e "    ${YELLOW}-d '{\"commands\":[\"echo hi\"],\"token\":\"${CLI_EXECUTOR_TOKEN_OUT}\"}'${NC}"
+            echo ""
+        fi
+        return
+    fi
     local env_file="${INSTALL_DIR}/.env"
     if [ -f "$env_file" ]; then
         local saved_token
@@ -1139,6 +1434,10 @@ parse_args() {
                 INSTALL_METHOD="sandbox"
                 shift
                 ;;
+            --cli-executor)
+                INSTALL_METHOD="cli-executor"
+                shift
+                ;;
             --agent-only)
                 AGENT_ONLY=1
                 shift
@@ -1153,6 +1452,8 @@ parse_args() {
                 echo "  --jar         Install standalone JAR with svcify service"
                 echo "  --source      Build from source with svcify service"
                 echo "  --sandbox     Run in Ubuntu sandbox container (for testing)"
+                echo "  --cli-executor  Install the cli-executor microservice (svcify on Linux,"
+                echo "                nssm.exe on Windows)"
                 echo "  --agent-only  Install only the backend agent (no UI). Use when"
                 echo "                you already have a UI instance and want to add"
                 echo "                another agent to it."
@@ -1198,6 +1499,9 @@ main() {
             ;;
         sandbox)
             install_sandbox_method
+            ;;
+        cli-executor)
+            install_cli_executor_method
             ;;
     esac
 
