@@ -1,5 +1,4 @@
 #Requires -Version 5.1
-$null = 0
 <#
 .SYNOPSIS
     GRIPHOOK Windows Installer
