@@ -21,6 +21,7 @@ import dev.runner.agent.service.AIConfigService;
 import dev.runner.agent.service.ChatService;
 import dev.runner.agent.service.SkillService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
@@ -75,6 +76,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "telegram.enabled", havingValue = "true")
 public class TelegramBotService implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private static final long MAX_CHUNK_SIZE = 4000L;

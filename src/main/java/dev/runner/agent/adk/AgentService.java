@@ -34,6 +34,7 @@ import dev.runner.agent.service.ChatService;
 import dev.runner.agent.service.CustomSkillService;
 import io.reactivex.rxjava3.core.Flowable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -271,7 +272,7 @@ public class AgentService {
             CancelExecutionTool cancelExecutionTool,
             ReadLogsTool readLogsTool,
             SlackTool slackTool,
-            TelegramTool telegramTool,
+            ObjectProvider<TelegramTool> telegramToolProvider,
             GmailTool gmailTool,
             GmailApiTool gmailApiTool,
             SmtpTool smtpTool,
@@ -302,11 +303,18 @@ public class AgentService {
         tools.add(FunctionTool.create(slackTool, "sendDeploymentNotification"));
         log.info("Slack integration tools registered (configuration checked at runtime)");
 
-        // Telegram tool (configuration checked at runtime)
-        tools.add(FunctionTool.create(telegramTool, "sendMessage"));
-        tools.add(FunctionTool.create(telegramTool, "sendPhoto"));
-        tools.add(FunctionTool.create(telegramTool, "listAllowedChats"));
-        log.info("Telegram integration tools registered (configuration checked at runtime)");
+        // Telegram tool (configuration checked at runtime). The bean is
+        // absent when telegram.enabled=false, so the tool list skips it
+        // instead of failing context init.
+        TelegramTool telegramTool = telegramToolProvider.getIfAvailable();
+        if (telegramTool != null) {
+            tools.add(FunctionTool.create(telegramTool, "sendMessage"));
+            tools.add(FunctionTool.create(telegramTool, "sendPhoto"));
+            tools.add(FunctionTool.create(telegramTool, "listAllowedChats"));
+            log.info("Telegram integration tools registered (configuration checked at runtime)");
+        } else {
+            log.info("Telegram integration tools skipped (telegram.enabled=false)");
+        }
 
         // Gmail SMTP tools
         tools.add(FunctionTool.create(gmailTool, "sendEmail"));
