@@ -309,6 +309,23 @@ function Initialize-PostgresDb {
     Write-Info 'Initializing PostgreSQL database...'
     Wait-PostgresReady
 
+    # Show the user exactly what we're about to run (creds redacted).
+    Write-Host '  SQL to run (as superuser "postgres"):' -ForegroundColor DarkGray
+    Write-Host '    DO $$ BEGIN' -ForegroundColor DarkGray
+    Write-Host '      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''' -NoNewline -ForegroundColor DarkGray
+    Write-Host $PgAppUser -NoNewline -ForegroundColor Cyan
+    Write-Host ''') THEN' -ForegroundColor DarkGray
+    Write-Host '        CREATE ROLE ' -NoNewline -ForegroundColor DarkGray
+    Write-Host $PgAppUser -NoNewline -ForegroundColor Cyan
+    Write-Host ' WITH LOGIN PASSWORD ''<redacted>'';' -ForegroundColor DarkGray
+    Write-Host '      END IF;' -ForegroundColor DarkGray
+    Write-Host '    END $$;' -ForegroundColor DarkGray
+    Write-Host '    CREATE DATABASE ' -NoNewline -ForegroundColor DarkGray
+    Write-Host $PgAppDb -NoNewline -ForegroundColor Cyan
+    Write-Host ' OWNER ' -NoNewline -ForegroundColor DarkGray
+    Write-Host $PgAppUser -ForegroundColor Cyan
+    Write-Host '  (skipped if database already exists)' -ForegroundColor DarkGray
+
     $env:PGPASSWORD = $PgSuperPassword
     try {
         # 1. Create the app role (idempotent via DO block). Regular
@@ -326,6 +343,7 @@ END $$;'
         & $psql -h localhost -p $PgPort -U postgres -f $roleFile 2>&1 |
             ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
         Remove-Item -Force $roleFile -ErrorAction SilentlyContinue
+        Write-Success "Role '$PgAppUser' ready (created or already existed)"
 
         # 2. Create database if it doesn't exist (CREATE DATABASE can't run
         #    inside a transaction/DO block, so probe + create).
@@ -482,8 +500,56 @@ function Write-EnvFile {
     param([string]$InstallDir)
 
     $envPath = Join-Path $InstallDir '.env'
+
+    # PG prompt block - shown on first install AND on re-runs. Defaults come
+    # from script-scope vars seeded by Import-PgCredsFromEnv (existing .env
+    # values) or the hardcoded defaults if .env doesn't exist yet.
+    $showPg = {
+        Write-Host ''
+        Write-Host '4. PostgreSQL (the backend is Postgres-only)'
+        Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
+        Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
+        Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
+        Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
+        $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
+        if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
+        $script:PgSuperPassword = $pgSuper
+
+        $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
+        if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
+        $script:PgAppDb = $pgDb
+
+        $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
+        if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
+        $script:PgAppUser = $pgUser
+
+        $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
+        if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
+        $script:PgAppPass = $pgPass
+    }
+
     if (Test-Path $envPath) {
-        Write-Info ".env already exists at $envPath - leaving it untouched"
+        Write-Info ".env already exists at $envPath - keeping token/apiKey/port"
+        Write-Host '   Re-prompting PostgreSQL credentials (defaults = current .env values).' -ForegroundColor DarkGray
+        & $showPg
+        # Rewrite just the SPRING_DATASOURCE_* lines in the existing file
+        # so we preserve AGENT_TOKEN / GOOGLE_AI_API_KEY / etc.
+        $pgUrl = "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${PgAppDb}"
+        $pgU   = "SPRING_DATASOURCE_USERNAME=${PgAppUser}"
+        $pgP   = "SPRING_DATASOURCE_PASSWORD=${PgAppPass}"
+        $out = @()
+        $sawUrl = $false; $sawU = $false; $sawP = $false
+        foreach ($l in Get-Content $envPath) {
+            if ($l -match '^\s*SPRING_DATASOURCE_URL\s*=') { $out += $pgUrl; $sawUrl = $true }
+            elseif ($l -match '^\s*SPRING_DATASOURCE_USERNAME\s*=') { $out += $pgU; $sawU = $true }
+            elseif ($l -match '^\s*SPRING_DATASOURCE_PASSWORD\s*=') { $out += $pgP; $sawP = $true }
+            else { $out += $l }
+        }
+        if (-not $sawUrl) { $out += $pgUrl }
+        if (-not $sawU)   { $out += $pgU }
+        if (-not $sawP)   { $out += $pgP }
+        Set-Content -Path $envPath -Value $out -Encoding ASCII
+        Write-Success "PostgreSQL credentials updated: ${envPath}"
         return
     }
 
@@ -519,27 +585,7 @@ function Write-EnvFile {
     }
     $port = "$portInt"
 
-    Write-Host ''
-    Write-Host '4. PostgreSQL (the backend is Postgres-only)'
-    Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
-    Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
-    Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
-    Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
-    $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
-    if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
-    $script:PgSuperPassword = $pgSuper
-
-    $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
-    if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
-    $script:PgAppDb = $pgDb
-
-    $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
-    if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
-    $script:PgAppUser = $pgUser
-
-    $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
-    if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
-    $script:PgAppPass = $pgPass
+    & $showPg
 
     $generatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm'
     $tempDir = $env:TEMP
@@ -557,9 +603,9 @@ function Write-EnvFile {
         "AGENT_ADK_ENABLED=true",
         "",
         "# PostgreSQL (the backend defaults to these via application.yml)",
-        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${pgDb}",
-        "SPRING_DATASOURCE_USERNAME=${pgUser}",
-        "SPRING_DATASOURCE_PASSWORD=${pgPass}"
+        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:${PgPort}/${PgAppDb}",
+        "SPRING_DATASOURCE_USERNAME=${PgAppUser}",
+        "SPRING_DATASOURCE_PASSWORD=${PgAppPass}"
     )
     Set-Content -Path $envPath -Value $lines -Encoding ASCII
     Write-Success "Configuration saved: ${envPath}"
@@ -864,11 +910,12 @@ function Main {
         Build-Frontend -SrcDir $srcDir -InstallDir $InstallDir
     }
 
-    Write-EnvFile -InstallDir $InstallDir
-
     # If .env was pre-existing (re-run) or hand-edited, import its
-    # SPRING_DATASOURCE_* so Initialize-PostgresDb targets the right db+user.
+    # SPRING_DATASOURCE_* BEFORE Write-EnvFile so the PG prompts below
+    # default to whatever the user already set up.
     Import-PgCredsFromEnv -EnvFile (Join-Path $InstallDir '.env')
+
+    Write-EnvFile -InstallDir $InstallDir
 
     # Create the runner/runner db+user the backend defaults to. The installer
     # does NOT install PostgreSQL itself - if psql is not on PATH, this prints
