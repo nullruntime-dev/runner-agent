@@ -16,7 +16,10 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
 
-$src = 'https://raw.githubusercontent.com/nullruntime-dev/runner-agent/main/install.ps1'
+# Append a cache-buster query param so raw.githubusercontent.com's CDN
+# doesn't serve a stale cached copy of install.ps1 (5min TTL). The param
+# is ignored by GitHub but defeats intermediate caches.
+$src = "https://raw.githubusercontent.com/nullruntime-dev/runner-agent/main/install.ps1?v=$((Get-Date).ToString('yyyyMMddHHmmss'))"
 $tmp = Join-Path $env:TEMP ('griphook-install-' + [Guid]::NewGuid().ToString('N') + '.ps1')
 
 try {
