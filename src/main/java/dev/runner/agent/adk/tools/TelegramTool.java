@@ -18,6 +18,7 @@ package dev.runner.agent.adk.tools;
 import com.google.adk.tools.Annotations.Schema;
 import dev.runner.agent.telegram.TelegramBotService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -27,29 +28,37 @@ import java.util.Optional;
 /**
  * ADK tool that lets the agent send messages via Telegram.
  * Read-only access to the bot config; delegates actual send to {@link TelegramBotService}.
+ * Uses ObjectProvider so the app still boots when telegram.enabled=false (the
+ * TelegramBotService bean is absent in that case).
  */
 @Slf4j
 @Component
 public class TelegramTool {
 
-    private final TelegramBotService telegramBotService;
+    private final ObjectProvider<TelegramBotService> telegramBotServiceProvider;
     private final dev.runner.agent.service.SkillService skillService;
 
-    public TelegramTool(TelegramBotService telegramBotService,
+    public TelegramTool(ObjectProvider<TelegramBotService> telegramBotServiceProvider,
                         dev.runner.agent.service.SkillService skillService) {
-        this.telegramBotService = telegramBotService;
+        this.telegramBotServiceProvider = telegramBotServiceProvider;
         this.skillService = skillService;
-        log.info("TelegramTool initialized");
+        log.info("TelegramTool initialized (telegram.enabled={})",
+                telegramBotServiceProvider.getIfAvailable() != null ? "true" : "false");
+    }
+
+    private TelegramBotService bot() {
+        return telegramBotServiceProvider.getIfAvailable();
     }
 
     private boolean isConfigured() {
         // Trust the actual bot session state, not the DB row. The Spring
         // telegrambots starter registers the BotSession at startup and does
         // NOT unregister it when the skill_configs row is later disabled or
-        // deleted — so a running bot with a disabled row would otherwise make
+        // deleted - so a running bot with a disabled row would otherwise make
         // this check return false and every send_telegram_message call fail
         // with "Telegram is not configured" even though the bot is live.
-        return telegramBotService.isConnected();
+        TelegramBotService b = bot();
+        return b != null && b.isConnected();
     }
 
     /**
@@ -109,12 +118,13 @@ public class TelegramTool {
         }
 
         try {
-            if (!telegramBotService.isConnected()) {
+            TelegramBotService b = bot();
+            if (b == null || !b.isConnected()) {
                 result.put("success", false);
                 result.put("error", "Telegram bot is not running");
                 return result;
             }
-            telegramBotService.sendMessage(parsedChatId, message);
+            b.sendMessage(parsedChatId, message);
             result.put("success", true);
             result.put("message", "Message sent to Telegram");
         } catch (Exception e) {
@@ -164,18 +174,19 @@ public class TelegramTool {
         }
 
         try {
-            if (!telegramBotService.isConnected()) {
+            TelegramBotService b = bot();
+            if (b == null || !b.isConnected()) {
                 result.put("success", false);
                 result.put("error", "Telegram bot is not running");
                 return result;
             }
-            byte[] data = telegramBotService.fetchUrl(url);
+            byte[] data = b.fetchUrl(url);
             if (data == null || data.length == 0) {
                 result.put("success", false);
                 result.put("error", "Downloaded image is empty");
                 return result;
             }
-            telegramBotService.sendPhoto(parsedChatId, data, caption);
+            b.sendPhoto(parsedChatId, data, caption);
             result.put("success", true);
             result.put("message", "Photo sent to Telegram");
         } catch (Exception e) {

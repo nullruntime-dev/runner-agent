@@ -20,6 +20,15 @@ searxng:
 ddgo:
   base-url: ${DDGO_BASE_URL:https://duckduckgo.com}
   html: ${DDGO_HTML:https://html.duckduckgo.com/html}
+
+# Telegram bot auto-registers with the Telegram API on startup via the
+# telegrambots Spring Boot starter. Gate the bean behind this flag so the
+# app doesn't 404 on startup when no bot token is configured. Set
+# -DTELEGRAM_ENABLED=true (or TELEGRAM_ENABLED env) once you've configured
+# a bot token in the dashboard.
+telegram:
+  enabled: ${TELEGRAM_ENABLED:false}
+
 spring:
   datasource:
     # PostgreSQL only. Default points at the local docker-compose `postgres` service.
