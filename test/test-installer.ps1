@@ -11,7 +11,7 @@
        with forwarded args (regression test for the Invoke-Expression /
        CmdletBinding bug)
     5. install.ps1 param() is the first executable statement (no stray
-       lines like "$null = 0" before it — breaks -File parse)
+       lines like "$null = 0" before it - breaks -File parse)
     6. install.ps1 Prisma data dir + db push exit-code check
     7. WinSW xml templates parse + have required tokens/elements
 
@@ -87,7 +87,7 @@ if ($helpText -match 'GRIPHOOK Windows Installer' -and $helpText -match '-SkipUI
 Write-Host ''
 Write-Host '  docs/install.ps1 wrapper (offline mock)' -ForegroundColor DarkGray
 
-# Mock install.ps1 with [CmdletBinding()] param() — this is the shape that broke
+# Mock install.ps1 with [CmdletBinding()] param() - this is the shape that broke
 # Invoke-Expression. If the wrapper still uses iex, this test FAILS.
 $mock = Join-Path $env:TEMP ("griphook-mock-" + [Guid]::NewGuid().ToString('N') + '.ps1')
 Set-Content -Path $mock -Encoding ASCII -Value @'
@@ -135,7 +135,7 @@ foreach ($l in $lines) {
     if ($t -match '^#Requires') { continue }      # #Requires directive
     if ($t -match '^using ') { continue }        # using statement
     if ($t -match '^param\(' -or $t -match '^\[CmdletBinding') { break }  # reached param block
-    # Executable statement before param() — BUG
+    # Executable statement before param() - BUG
     $badBeforeParam = $true
     Write-Host "      bad line: $l" -ForegroundColor DarkGray
     break
@@ -173,23 +173,24 @@ foreach ($x in $winswXmls) {
         [xml](Get-Content -Raw $f) | Out-Null
         $raw = Get-Content -Raw $f
         $hasId    = $raw -match '<id>(Griphook|GriphookUI)</id>'
-        $hasExec  = $raw -match '<executable>'
+        $hasExec  = $raw -match '<executable>cmd\.exe</executable>'
+        $hasArgs  = $raw -match '/c "%BASE%\\griphook-start'
         $hasLog   = $raw -match 'mode="roll-by-size"'
         $hasDepend = $true
         if ($x.node) { $hasDepend = $raw -match '<depend>Griphook</depend>' }
         if ($x.java) { $hasDepend = $raw -notmatch '<depend>' }  # backend has no dependency
-        $tokenOk = $true
-        if ($x.java) { $tokenOk = $raw -match '__JAVA_EXE__' -and $raw -match '__ENV_VARS__' }
-        if ($x.node) { $tokenOk = $raw -match '__NODE_EXE__' -and $raw -match '__ENV_VARS__' }
-        if ($hasId -and $hasExec -and $hasLog -and $hasDepend -and $tokenOk) {
+        # No tokens should remain - launchers are generated .bat files now.
+        $noTokens = $raw -notmatch '__JAVA_EXE__' -and $raw -notmatch '__NODE_EXE__' -and $raw -notmatch '__ENV_VARS__'
+        if ($hasId -and $hasExec -and $hasArgs -and $hasLog -and $hasDepend -and $noTokens) {
             Show-Pass "WinSW xml valid: $(Split-Path -Leaf $f)"
         } else {
             Show-Fail "WinSW xml invalid/incomplete: $(Split-Path -Leaf $f)"
             if (-not $hasId)     { Write-Host "      missing <id>" -ForegroundColor DarkGray }
-            if (-not $hasExec)   { Write-Host "      missing <executable>" -ForegroundColor DarkGray }
+            if (-not $hasExec)   { Write-Host "      missing cmd.exe <executable>" -ForegroundColor DarkGray }
+            if (-not $hasArgs)   { Write-Host "      missing /c griphook-start args" -ForegroundColor DarkGray }
             if (-not $hasLog)    { Write-Host "      missing roll-by-size log" -ForegroundColor DarkGray }
             if (-not $hasDepend) { Write-Host "      missing/wrong <depend>" -ForegroundColor DarkGray }
-            if (-not $tokenOk)   { Write-Host "      missing __JAVA_EXE__/__NODE_EXE__/__ENV_VARS__ token" -ForegroundColor DarkGray }
+            if (-not $noTokens)  { Write-Host "      stale __JAVA_EXE__/__NODE_EXE__/__ENV_VARS__ token (should be gone)" -ForegroundColor DarkGray }
         }
     } catch {
         Show-Fail "WinSW xml parse error in $f : $($_.Exception.Message)"
