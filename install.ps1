@@ -18,9 +18,11 @@
     agent to it. One UI can manage multiple agents via the Add Agent
     page in the dashboard.
 .PARAMETER SkipPostgres
-    Skip PostgreSQL install + db/user initialization. Use this when you
-    already have Postgres running and have configured SPRING_DATASOURCE_*
-    in the .env file yourself.
+    Skip the PostgreSQL db/user initialization + the manual-install
+    instructions. The installer does NOT install PostgreSQL for you —
+    install it separately (see the printed instructions). Use this switch
+    only if you have already set up Postgres + the runner/runner db/user
+    yourself, or if you configure SPRING_DATASOURCE_* in .env manually.
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
@@ -212,10 +214,13 @@ function Install-Git {
 }
 
 # -- PostgreSQL --------------------------------------------------------------
-# The backend is Postgres-only (see application.yml). Install via winget
-# (EnterpriseDB installer, unattended) + create the runner/runner db+user
-# the app defaults to (SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner,
-# _USERNAME=runner, _PASSWORD=runner). Superuser password is 'postgres'.
+# The backend is Postgres-only (see application.yml). The installer does NOT
+# install PostgreSQL for you — install it manually first (winget one-liner
+# below), then this installer creates the runner/runner db+user the app
+# defaults to (SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner,
+# _USERNAME=runner, _PASSWORD=runner). If psql is not on PATH when this
+# installer runs, it prints manual instructions + skips db init (the backend
+# service will fail to start until you install Postgres + re-run).
 $RequiredPgVer = 16
 $PgSuperPassword = 'postgres'
 $PgAppDb    = 'runner'
@@ -223,47 +228,25 @@ $PgAppUser  = 'runner'
 $PgAppPass  = 'runner'
 $PgPort     = 5432
 
-function Test-PostgresInstalled {
-    # Either psql on PATH or the postgresql-x64-16 service present.
-    if (Resolve-OnPath 'psql') { return $true }
-    $svc = Get-Service -Name "postgresql-x64-$RequiredPgVer" -ErrorAction SilentlyContinue
-    return ($null -ne $svc)
+function Write-PostgresInstructions {
+    Write-Host ''
+    Write-Host '  PostgreSQL required (not installed / psql not on PATH)' -ForegroundColor Yellow
+    Write-Host '  The backend is Postgres-only. Install it, then re-run this installer.' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '  Option A - winget (elevated PowerShell):' -ForegroundColor Cyan
+    Write-Host "    winget install -e --id PostgreSQL.PostgreSQL.$RequiredPgVer --override `"--mode unattended --superpassword $PgSuperPassword --serverport $PgPort`""
+    Write-Host ''
+    Write-Host '  Option B - download the installer:' -ForegroundColor Cyan
+    Write-Host '    https://www.postgresql.org/download/windows/'
+    Write-Host ''
+    Write-Host '  After install, open a NEW terminal (so PATH refreshes) + re-run:' -ForegroundColor Cyan
+    Write-Host '    install.bat'
+    Write-Host ''
+    Write-Host "  The installer will then create the '$PgAppUser' role + '$PgAppDb' database the backend expects." -ForegroundColor DarkGray
+    Write-Host ''
 }
 
-function Install-Postgres {
-    if (Test-PostgresInstalled) {
-        Write-Success "PostgreSQL $RequiredPgVer already installed"
-        return
-    }
-
-    Write-Info "Installing PostgreSQL $RequiredPgVer via winget (unattended)..."
-    # EnterpriseDB installer flags:
-    #   --mode unattended        no UI
-    #   --superpassword <pw>     set postgres superuser password
-    #   --serverport <port>      listening port
-    winget install --id PostgreSQL.PostgreSQL.$RequiredPgVer `
-        --silent --accept-package-agreements --accept-source-agreements `
-        --scope machine `
-        --override "--mode unattended --superpassword $PgSuperPassword --serverport $PgPort" |
-        Out-Null
-
-    Update-SessionPath
-
-    if (-not (Test-PostgresInstalled)) {
-        throw "PostgreSQL install appeared to succeed but neither psql nor the service was found. Open a new terminal and re-run."
-    }
-    Write-Success "PostgreSQL $RequiredPgVer installed"
-
-    # The EnterpriseDB installer starts the service, but give it a moment.
-    $svcName = "postgresql-x64-$RequiredPgVer"
-    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-    if ($null -ne $svc -and $svc.Status -ne 'Running') {
-        Write-Info "Starting $svcName..."
-        Start-Service -Name $svcName
-    }
-}
-
-# Wait until Postgres accepts connections (pg_isready or psql probe).
+# Wait until Postgres accepts connections (psql probe).
 function Wait-PostgresReady {
     $psql = Resolve-OnPath 'psql'
     if (-not $psql) { throw "psql not on PATH - cannot probe Postgres readiness" }
@@ -281,12 +264,16 @@ function Wait-PostgresReady {
     throw "Postgres did not become ready within 60s"
 }
 
-# Create the app db + user (idempotent). Uses a temp SQL file to avoid $$
-# escaping pain in PowerShell strings.
+# Create the app db + user (idempotent). Only runs when psql is on PATH.
+# Uses a temp SQL file to avoid $$ escaping pain in PowerShell strings.
 function Initialize-PostgresDb {
     $psql = Resolve-OnPath 'psql'
-    if (-not $psql) { throw "psql not on PATH - cannot initialize Postgres db" }
+    if (-not $psql) {
+        Write-PostgresInstructions
+        return
+    }
 
+    Write-Info 'Initializing PostgreSQL database...'
     Wait-PostgresReady
 
     $env:PGPASSWORD = $PgSuperPassword
@@ -733,10 +720,16 @@ function Write-NextSteps {
     Write-Host (Join-Path $InstallDir 'logs')
     Write-Host ''
     Write-Host '  Database (PostgreSQL):' -ForegroundColor Cyan
-    Write-Host "    Service:    postgresql-x64-$RequiredPgVer"
-    Write-Host "    Connect:    jdbc:postgresql://localhost:$PgPort/$PgAppDb"
-    Write-Host "    App user:   $PgAppUser  (password: $PgAppUser)"
-    Write-Host "    Superuser:  postgres   (password: $PgSuperPassword)"
+    if (Resolve-OnPath 'psql') {
+        Write-Host "    Connect:    jdbc:postgresql://localhost:$PgPort/$PgAppDb"
+        Write-Host "    App user:   $PgAppUser  (password: $PgAppUser)"
+        Write-Host "    Superuser:  postgres   (password: $PgSuperPassword)"
+    } else {
+        Write-Host "    NOT installed - backend will fail to start until you install Postgres" -ForegroundColor Yellow
+        Write-Host "    Install (elevated PowerShell):" -ForegroundColor Cyan
+        Write-Host "      winget install -e --id PostgreSQL.PostgreSQL.$RequiredPgVer --override `"--mode unattended --superpassword $PgSuperPassword --serverport $PgPort`""
+        Write-Host "    Then re-run: install.bat" -ForegroundColor Cyan
+    }
     Write-Host ''
     Write-Host '  Service management:' -ForegroundColor Cyan
     Write-Host "    Start-Service $BackendServiceName"
@@ -798,7 +791,6 @@ function Main {
     Install-Java
     if (-not $SkipUI) { Install-Node }
     Install-Git
-    if (-not $SkipPostgres) { Install-Postgres }
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     $srcDir = Join-Path $InstallDir 'src'
@@ -813,10 +805,11 @@ function Main {
 
     Write-EnvFile -InstallDir $InstallDir
 
-    # Create the runner/runner db+user the backend defaults to. Happens
-    # after Write-EnvFile so a user-supplied .env is left untouched, and
-    # before Start-Services so the backend can connect on first boot.
-    # Skip with -SkipPostgres (user has their own Postgres + creds).
+    # Create the runner/runner db+user the backend defaults to. The installer
+    # does NOT install PostgreSQL itself — if psql is not on PATH, this prints
+    # manual install instructions + skips (the backend service will fail to
+    # start until you install Postgres + re-run). Skip with -SkipPostgres to
+    # suppress the instructions (you manage Postgres yourself).
     if (-not $SkipPostgres) { Initialize-PostgresDb }
 
     if ($SkipServices) {
