@@ -17,6 +17,10 @@
     already have a UI instance elsewhere and just want to add another
     agent to it. One UI can manage multiple agents via the Add Agent
     page in the dashboard.
+.PARAMETER SkipPostgres
+    Skip PostgreSQL install + db/user initialization. Use this when you
+    already have Postgres running and have configured SPRING_DATASOURCE_*
+    in the .env file yourself.
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
@@ -27,7 +31,8 @@ param(
     [string]$Method = 'source',
     [string]$InstallDir = "${env:ProgramData}\Griphook",
     [switch]$SkipServices,
-    [switch]$SkipUI
+    [switch]$SkipUI,
+    [switch]$SkipPostgres
 )
 
 $ErrorActionPreference = 'Stop'
@@ -190,6 +195,116 @@ function Install-Git {
         throw "Git install appeared to succeed but 'git' is still not on PATH. Open a new terminal and re-run."
     }
     Write-Success 'Git installed'
+}
+
+# -- PostgreSQL --------------------------------------------------------------
+# The backend is Postgres-only (see application.yml). Install via winget
+# (EnterpriseDB installer, unattended) + create the runner/runner db+user
+# the app defaults to (SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runner,
+# _USERNAME=runner, _PASSWORD=runner). Superuser password is 'postgres'.
+$RequiredPgVer = 16
+$PgSuperPassword = 'postgres'
+$PgAppDb    = 'runner'
+$PgAppUser  = 'runner'
+$PgAppPass  = 'runner'
+$PgPort     = 5432
+
+function Test-PostgresInstalled {
+    # Either psql on PATH or the postgresql-x64-16 service present.
+    if (Resolve-OnPath 'psql') { return $true }
+    $svc = Get-Service -Name "postgresql-x64-$RequiredPgVer" -ErrorAction SilentlyContinue
+    return ($null -ne $svc)
+}
+
+function Install-Postgres {
+    if (Test-PostgresInstalled) {
+        Write-Success "PostgreSQL $RequiredPgVer already installed"
+        return
+    }
+
+    Write-Info "Installing PostgreSQL $RequiredPgVer via winget (unattended)..."
+    # EnterpriseDB installer flags:
+    #   --mode unattended        no UI
+    #   --superpassword <pw>     set postgres superuser password
+    #   --serverport <port>      listening port
+    winget install --id PostgreSQL.PostgreSQL.$RequiredPgVer `
+        --silent --accept-package-agreements --accept-source-agreements `
+        --scope machine `
+        --override "--mode unattended --superpassword $PgSuperPassword --serverport $PgPort" |
+        Out-Null
+
+    Update-SessionPath
+
+    if (-not (Test-PostgresInstalled)) {
+        throw "PostgreSQL install appeared to succeed but neither psql nor the service was found. Open a new terminal and re-run."
+    }
+    Write-Success "PostgreSQL $RequiredPgVer installed"
+
+    # The EnterpriseDB installer starts the service, but give it a moment.
+    $svcName = "postgresql-x64-$RequiredPgVer"
+    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+    if ($null -ne $svc -and $svc.Status -ne 'Running') {
+        Write-Info "Starting $svcName..."
+        Start-Service -Name $svcName
+    }
+}
+
+# Wait until Postgres accepts connections (pg_isready or psql probe).
+function Wait-PostgresReady {
+    $psql = Resolve-OnPath 'psql'
+    if (-not $psql) { throw "psql not on PATH - cannot probe Postgres readiness" }
+    $env:PGPASSWORD = $PgSuperPassword
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $deadline) {
+        $out = & $psql -h localhost -p $PgPort -U postgres -tAc "SELECT 1" 2>&1
+        if ($LASTEXITCODE -eq 0 -and "$out".Trim() -eq '1') {
+            Remove-Item Env:PGPASSWORD
+            return
+        }
+        Start-Sleep -Seconds 2
+    }
+    Remove-Item Env:PGPASSWORD
+    throw "Postgres did not become ready within 60s"
+}
+
+# Create the app db + user (idempotent). Uses a temp SQL file to avoid $$
+# escaping pain in PowerShell strings.
+function Initialize-PostgresDb {
+    $psql = Resolve-OnPath 'psql'
+    if (-not $psql) { throw "psql not on PATH - cannot initialize Postgres db" }
+
+    Wait-PostgresReady
+
+    $env:PGPASSWORD = $PgSuperPassword
+    try {
+        # 1. Create role runner (idempotent via DO block). Single-quoted
+        #    here-string so $$ is literal (no PS interpolation).
+        $roleSql = @'
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'runner') THEN
+    CREATE ROLE runner WITH LOGIN PASSWORD 'runner';
+  END IF;
+END $$;
+'@
+        $roleFile = Join-Path $env:TEMP 'griphook-pg-role.sql'
+        Set-Content -Path $roleFile -Value $roleSql -Encoding ASCII
+        & $psql -h localhost -p $PgPort -U postgres -f $roleFile 2>&1 |
+            ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        Remove-Item -Force $roleFile -ErrorAction SilentlyContinue
+
+        # 2. Create database runner if it doesn't exist (CREATE DATABASE
+        #    can't run inside a transaction/DO block, so probe + create).
+        $exists = (& $psql -h localhost -p $PgPort -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$PgAppDb'").Trim()
+        if ($exists -ne '1') {
+            & $psql -h localhost -p $PgPort -U postgres -c "CREATE DATABASE $PgAppDb OWNER $PgAppUser" 2>&1 |
+                ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+            Write-Success "Created database '$PgAppDb' (owner: $PgAppUser)"
+        } else {
+            Write-Success "Database '$PgAppDb' already exists"
+        }
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
 }
 
 # -- Clone + build ----------------------------------------------------------
@@ -603,6 +718,12 @@ function Write-NextSteps {
     Write-Host '  Logs:        ' -NoNewline -ForegroundColor Cyan
     Write-Host (Join-Path $InstallDir 'logs')
     Write-Host ''
+    Write-Host '  Database (PostgreSQL):' -ForegroundColor Cyan
+    Write-Host "    Service:    postgresql-x64-$RequiredPgVer"
+    Write-Host "    Connect:    jdbc:postgresql://localhost:$PgPort/$PgAppDb"
+    Write-Host "    App user:   $PgAppUser  (password: $PgAppUser)"
+    Write-Host "    Superuser:  postgres   (password: $PgSuperPassword)"
+    Write-Host ''
     Write-Host '  Service management:' -ForegroundColor Cyan
     Write-Host "    Start-Service $BackendServiceName"
     if (-not $AgentOnly) {
@@ -663,6 +784,7 @@ function Main {
     Install-Java
     if (-not $SkipUI) { Install-Node }
     Install-Git
+    if (-not $SkipPostgres) { Install-Postgres }
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     $srcDir = Join-Path $InstallDir 'src'
@@ -676,6 +798,12 @@ function Main {
     }
 
     Write-EnvFile -InstallDir $InstallDir
+
+    # Create the runner/runner db+user the backend defaults to. Happens
+    # after Write-EnvFile so a user-supplied .env is left untouched, and
+    # before Start-Services so the backend can connect on first boot.
+    # Skip with -SkipPostgres (user has their own Postgres + creds).
+    if (-not $SkipPostgres) { Initialize-PostgresDb }
 
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'
