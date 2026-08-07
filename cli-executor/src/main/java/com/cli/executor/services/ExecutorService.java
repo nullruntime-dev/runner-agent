@@ -4,10 +4,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 @Service
@@ -113,5 +116,75 @@ public class ExecutorService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Run a single command for the outbound runner-agent daemon. Unlike
+     * {@link #runSync}, this:
+     * <ul>
+     *   <li>does NOT check the service token — the command came from
+     *       runner-agent, already authed via the per-executor token;</li>
+     *   <li>captures stdout and stderr separately (not merged);</li>
+     *   <li>enforces a timeout via {@code destroyForcibly} so a hung command
+     *       can't block the poll loop;</li>
+     *   <li>never throws — exit code / timeout / launch failure are all
+     *       reported via {@link ExecOutcome} so the daemon can post a result
+     *       back for every command it receives.</li>
+     * </ul>
+     *
+     * @param command   single shell command string (no positional args; the
+     *                  runner-agent protocol sends one string, not a list)
+     * @param timeoutSec per-command timeout; {@code <= 0} means 60s
+     */
+    public ExecOutcome runRemote(String command, int timeoutSec) {
+        if (command == null || command.isBlank()) {
+            return new ExecOutcome(2, "", "empty command");
+        }
+        int timeout = timeoutSec > 0 ? timeoutSec : 60;
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
+            // Streams NOT merged — drain each on its own thread to avoid the
+            // classic deadlock where a full pipe buffer blocks the process.
+            Process process = pb.start();
+
+            StringBuilder out = new StringBuilder();
+            StringBuilder err = new StringBuilder();
+            Thread tOut = drainAsync(process.getInputStream(), out);
+            Thread tErr = drainAsync(process.getErrorStream(), err);
+
+            boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                tOut.interrupt();
+                tErr.interrupt();
+                return new ExecOutcome(-1, out.toString(), "timeout after " + timeout + "s");
+            }
+            tOut.join(1_000);
+            tErr.join(1_000);
+            return new ExecOutcome(process.exitValue(), out.toString(), err.toString());
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return new ExecOutcome(-1, "", "interrupted");
+        } catch (Exception e) {
+            return new ExecOutcome(-1, "", "failed to run: " + e.getMessage());
+        }
+    }
+
+    private Thread drainAsync(InputStream is, StringBuilder sb) {
+        Thread t = new Thread(() -> {
+            try (BufferedReader r = new BufferedReader(
+                    new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    sb.append(line).append("\n");
+                }
+            } catch (IOException ignored) {
+                // stream closed by process exit or destroyForcibly — expected
+            }
+        }, "cmd-drain");
+        t.setDaemon(true);
+        t.start();
+        return t;
     }
 }

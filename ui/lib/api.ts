@@ -601,6 +601,61 @@ export async function updateScheduledTask(
   return res.json();
 }
 
+// Remote Executors types and functions
+
+export interface Executor {
+  id: number;
+  name: string;
+  status: 'ONLINE' | 'OFFLINE';
+  lastSeenAt: string;
+  createdAt: string;
+}
+
+export interface CreatedExecutor {
+  success: boolean;
+  id?: number;
+  name?: string;
+  token?: string;
+  status?: string;
+  error?: string;
+}
+
+export async function getExecutors(agentId: string): Promise<Executor[]> {
+  try {
+    const res = await apiFetch(`/api/agents/${agentId}/executors`, { cache: 'no-store' });
+    if (!res.ok) {
+      console.error('Failed to fetch executors:', res.status);
+      return [];
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching executors:', err);
+    return [];
+  }
+}
+
+export async function createExecutor(
+  agentId: string,
+  name: string
+): Promise<CreatedExecutor> {
+  const res = await apiFetch(`/api/agents/${agentId}/executors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return res.json();
+}
+
+export async function deleteExecutor(
+  agentId: string,
+  executorId: number
+): Promise<{ success: boolean; error?: string }> {
+  const res = await apiFetch(`/api/agents/${agentId}/executors/${executorId}`, {
+    method: 'DELETE',
+  });
+  return res.json();
+}
+
 // Chat Session types and functions
 
 export interface ChatSessionMessage {

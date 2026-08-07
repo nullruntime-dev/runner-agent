@@ -39,9 +39,11 @@
                                       FilterChain filterChain) throws ServletException, IOException {
           String path = request.getRequestURI();
 
-          // Skip auth for health, OAuth callback, and CORS preflight
+          // Skip auth for health, OAuth callback, daemon endpoints, and CORS preflight.
+          // /daemon/* authenticate via the per-executor token inside DaemonController.
           if (path.equals("/health")
                   || path.equals("/agent/gmail/auth/callback")
+                  || path.startsWith("/daemon/")
                   || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
               filterChain.doFilter(request, response);
               return;

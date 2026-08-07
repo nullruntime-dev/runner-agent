@@ -274,11 +274,9 @@ print_next_steps() {
     echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.yml up -d${NC}"
     echo ""
     echo -e "  ${CYAN}2.${NC} Check status:"
-    echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.postgres.yml ps${NC}"
     echo -e "     ${YELLOW}cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.yml ps${NC}"
     echo ""
     echo -e "  ${CYAN}3.${NC} View logs:"
-    echo -e "     ${YELLOW}sudo docker compose -f docker-compose.postgres.yml logs -f${NC}"
     echo -e "     ${YELLOW}sudo docker compose -f docker-compose.yml logs -f${NC}"
     echo ""
     if [ "$AGENT_ONLY" -eq 1 ]; then
@@ -354,16 +352,10 @@ main() {
     fi
     cd "$INSTALL_DIR"
 
-    # Download both compose files. The prod file declares the
-    # runner-agent-net network as external and expects Postgres to be
-    # provided by docker-compose.postgres.yml (which also creates the network).
+    # Download the prod compose file. The backend uses embedded SQLite
+    # (no DB server); docker-compose.prod.yml defines its own bridge
+    # network, so no separate compose file is needed.
     local base="https://raw.githubusercontent.com/${GITHUB_REPO}/main"
-    log_info "Downloading docker-compose.postgres.yml..."
-    if [ "$OS" == "windows" ]; then
-        curl -fsSL -o docker-compose.postgres.yml "${base}/docker-compose.postgres.yml"
-    else
-        $SUDO curl -fsSL -o docker-compose.postgres.yml "${base}/docker-compose.postgres.yml"
-    fi
     log_info "Downloading docker-compose.prod.yml..."
     if [ "$OS" == "windows" ]; then
         curl -fsSL -o docker-compose.yml "${base}/docker-compose.prod.yml"
@@ -403,25 +395,12 @@ EOF
     # Interactive configuration
     configure_env_interactive "$env_file"
 
-    # Pull images for both compose files
+    # Pull images
     log_info "Pulling Docker images..."
     if [ "$OS" == "windows" ]; then
-        docker compose -f docker-compose.postgres.yml pull
         docker compose -f docker-compose.yml pull
     else
-        $SUDO docker compose -f docker-compose.postgres.yml pull
         $SUDO docker compose -f docker-compose.yml pull
-    fi
-
-    # Start Postgres first — docker-compose.postgres.yml creates the
-    # runner-agent-net network; docker-compose.prod.yml references it as external.
-    log_info "Starting Postgres + network..."
-    if [ "$OS" == "windows" ]; then
-        docker compose -f docker-compose.postgres.yml up -d || \
-          log_warn "postgres up -d failed; run manually: cd ${INSTALL_DIR} && docker compose -f docker-compose.postgres.yml up -d"
-    else
-        $SUDO docker compose -f docker-compose.postgres.yml up -d || \
-          log_warn "postgres up -d failed; run manually: cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.postgres.yml up -d"
     fi
 
     # Start agent (+ ui unless --agent-only). Prod compose service name: agent.
