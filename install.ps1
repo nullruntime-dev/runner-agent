@@ -17,6 +17,17 @@
     already have a UI instance elsewhere and just want to add another
     agent to it. One UI can manage multiple agents via the Add Agent
     page in the dashboard.
+.PARAMETER NoPause
+    Don't pause for a keypress at the end of the script. By default the
+    installer waits so you can read/copy the agent token printed by
+    Write-NextSteps before the window closes. Pass this for CI / automation.
+.PARAMETER CliExecutor
+    Install the CLI Executor (remote command runner) instead of the full
+    GRIPHOOK agent + UI. Skips the interactive product prompt. The executor
+    builds from source + registers as the GriphookCliExecutor Windows service.
+.PARAMETER CliExecutorDir
+    Install directory for the CLI Executor (default:
+    ${env:ProgramData}\GriphookCliExecutor). Only used with -CliExecutor.
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
@@ -27,7 +38,10 @@ param(
     [string]$Method = 'source',
     [string]$InstallDir = "${env:ProgramData}\Griphook",
     [switch]$SkipServices,
-    [switch]$SkipUI
+    [switch]$SkipUI,
+    [switch]$NoPause,
+    [switch]$CliExecutor,
+    [string]$CliExecutorDir = "${env:ProgramData}\GriphookCliExecutor"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -707,11 +721,375 @@ function Write-NextSteps {
     }
 }
 
+# -- CLI Executor (remote command runner) -----------------------------------
+# Separate install path: builds only the cli-executor jar from the same repo,
+# registers it as the GriphookCliExecutor Windows service (WinSW), and
+# configures either daemon mode (calls runner-agent outbound — works behind
+# NAT/firewall) or inbound mode (agent calls this host via POST /executor/run).
+# Mirrors install.sh's cli-executor path.
+
+# Build the cli-executor jar (separate gradle project in cli-executor/).
+function Build-CliExecutor {
+    param([string]$SrcDir, [string]$InstallDir)
+
+    $ceSrc = Join-Path $SrcDir 'cli-executor'
+    if (-not (Test-Path $ceSrc)) { throw "cli-executor source not found at $ceSrc" }
+
+    Write-Info 'Building cli-executor with Gradle...'
+    Push-Location $ceSrc
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & cmd.exe /c 'gradlew.bat bootJar --no-daemon 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        $gradleExit = $LASTEXITCODE
+        if ($gradleExit -ne 0) { throw "cli-executor Gradle build failed (exit $gradleExit)" }
+    } finally {
+        $ErrorActionPreference = $prevEap
+        Pop-Location
+    }
+
+    $jar = Get-ChildItem -Path (Join-Path $ceSrc 'build\libs') -Filter '*.jar' |
+           Where-Object { $_.Name -notmatch 'plain' } |
+           Select-Object -First 1
+    if (-not $jar) { throw 'cli-executor JAR not found after build' }
+
+    $destJar = Join-Path $InstallDir 'cli-executor.jar'
+    Copy-Item -Force $jar.FullName $destJar
+    Write-Success "cli-executor JAR installed: $destJar"
+}
+
+function New-CliExecutorToken {
+    $bytes = New-Object byte[] 24
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [BitConverter]::ToString($bytes).Replace('-', '').ToLower()
+}
+
+# Read an existing .env so re-runs default to the user's current values.
+function Import-CliExecutorConfig {
+    param([string]$EnvPath)
+    if (-not (Test-Path $EnvPath)) { return }
+    foreach ($l in Get-Content $EnvPath) {
+        if ($l -match '^\s*SERVER_PORT=(.*)$') { $script:CePort = $matches[1].Trim() }
+        elseif ($l -match '^\s*SPRING_APPLICATION_TOKEN=(.*)$') { $script:CeToken = $matches[1].Trim() }
+        elseif ($l -match '^\s*RUNNER_URL=(.*)$') { $script:CeRunnerUrl = $matches[1].Trim() }
+        elseif ($l -match '^\s*EXECUTOR_ID=(.*)$') { $script:CeExecutorId = $matches[1].Trim() }
+        elseif ($l -match '^\s*EXECUTOR_TOKEN=(.*)$) { $script:CeExecutorToken = $matches[1].Trim() }
+    }
+}
+
+function Prompt-CliExecutorConfig {
+    param([string]$InstallDir)
+
+    Write-Host ''
+    Write-Host '============================================' -ForegroundColor Cyan
+    Write-Host '      CLI Executor Configuration          ' -ForegroundColor Cyan
+    Write-Host '============================================' -ForegroundColor Cyan
+    Write-Host ''
+
+    # Daemon mode is the primary use case for a remote executor: it calls
+    # the runner-agent outbound (register + long-poll /work + post /results),
+    # so it works behind NAT/firewall. Ask for the three env vars explicitly.
+    Write-Host '  Daemon mode — connect to a GRIPHOOK agent over HTTP' -ForegroundColor Cyan
+    Write-Host '  The executor calls the agent outbound, so it works behind NAT/firewall.' -ForegroundColor DarkGray
+    Write-Host '  Get these three values from the agent UI:' -ForegroundColor DarkGray
+    Write-Host '  Settings -> Remote Executors -> Add (the token is shown once).' -ForegroundColor DarkGray
+    Write-Host '  Leave RUNNER_URL blank to skip daemon mode (inbound-only).' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $urlDefault = if ($CeRunnerUrl) { $CeRunnerUrl } else { '' }
+    $url = Read-Host "  RUNNER_URL (e.g. http://host:8090) [${urlDefault}, blank = skip]"
+    if ([string]::IsNullOrWhiteSpace($url)) { $url = $urlDefault }
+    $script:CeRunnerUrl = $url
+
+    if ($CeRunnerUrl) {
+        $idDefault = if ($CeExecutorId) { $CeExecutorId } else { '' }
+        $id = Read-Host "  EXECUTOR_ID (from the agent UI) [${idDefault}]"
+        if ([string]::IsNullOrWhiteSpace($id)) { $id = $idDefault }
+        $script:CeExecutorId = $id
+
+        $tokDef = if ($CeExecutorToken) { $CeExecutorToken } else { '' }
+        $etok = Read-Host "  EXECUTOR_TOKEN (from the agent UI, shown once) [${tokDef}]"
+        if ([string]::IsNullOrWhiteSpace($etok)) { $etok = $tokDef }
+        $script:CeExecutorToken = $etok
+
+        if ([string]::IsNullOrWhiteSpace($script:CeExecutorId) -or [string]::IsNullOrWhiteSpace($script:CeExecutorToken)) {
+            Write-Warn 'Daemon mode needs both EXECUTOR_ID and EXECUTOR_TOKEN; disabling daemon mode.'
+            $script:CeRunnerUrl = ''
+            $script:CeExecutorId = ''
+            $script:CeExecutorToken = ''
+        }
+    } else {
+        $script:CeExecutorId = ''
+        $script:CeExecutorToken = ''
+    }
+
+    Write-Host ''
+    Write-Host '  Inbound mode (legacy — only needed if the agent calls this host' -ForegroundColor DarkGray
+    Write-Host '  directly via POST /executor/run). Skip with Enter to use defaults.' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $portDefault = if ($CePort) { $CePort } else { '8010' }
+    $port = Read-Host "  SERVER_PORT [${portDefault}]"
+    if ([string]::IsNullOrWhiteSpace($port)) { $port = $portDefault }
+    $script:CePort = $port
+
+    $tokenDefault = if ($CeToken) { $CeToken } else { '' }
+    if ($tokenDefault) {
+        $tok = Read-Host "  SPRING_APPLICATION_TOKEN (inbound /executor/run auth) [${tokenDefault}]"
+        if ([string]::IsNullOrWhiteSpace($tok)) { $tok = $tokenDefault }
+    } else {
+        $tok = Read-Host '  SPRING_APPLICATION_TOKEN (inbound auth) [auto-generate]'
+        if ([string]::IsNullOrWhiteSpace($tok)) {
+            $tok = New-CliExecutorToken
+            Write-Host "   Generated: $($tok.Substring(0,16))..." -ForegroundColor Green
+        }
+    }
+    $script:CeToken = $tok
+}
+
+function Write-CliExecutorEnv {
+    param([string]$InstallDir)
+    $path = Join-Path $InstallDir '.env'
+    $lines = @(
+        "SPRING_APPLICATION_TOKEN=$CeToken",
+        "SERVER_PORT=$CePort"
+    )
+    if ($CeRunnerUrl) {
+        $lines += "RUNNER_URL=$CeRunnerUrl"
+        $lines += "EXECUTOR_ID=$CeExecutorId"
+        $lines += "EXECUTOR_TOKEN=$CeExecutorToken"
+    }
+    Set-Content -Path $path -Value $lines -Encoding ASCII
+    Write-Success "Config written: $path"
+    if ($CeRunnerUrl) {
+        Write-Info "Daemon mode ON -> registers with $CeRunnerUrl as id=$CeExecutorId"
+    } else {
+        Write-Info 'Daemon mode OFF -> inbound-only (agent must reach this host)'
+    }
+}
+
+# Launcher batch script. WinSW runs this via cmd.exe; it sources .env into
+# the process environment then launches the jar. Edit .env + Restart-Service
+# GriphookCliExecutor to change config (no .bat regen needed).
+function Write-CliExecutorLauncher {
+    param([string]$InstallDir)
+    $bat = @(
+        '@echo off',
+        'rem CLI Executor launcher (generated by install.ps1).',
+        'rem Sources .env into the process environment, then runs the jar.',
+        'rem Edit .env + Restart-Service GriphookCliExecutor to change config.',
+        'cd /d "%~dp0"',
+        'for /f "usebackq tokens=1,* delims==" %%a in (".env") do set "%%a=%%b"',
+        'java -jar cli-executor.jar'
+    )
+    $path = Join-Path $InstallDir 'cli-executor-start.bat'
+    Set-Content -Path $path -Value $bat -Encoding ASCII
+    Write-Success "Launcher written: $path"
+}
+
+# Copy the shared WinSW exe to a cli-executor-named copy + generate its xml.
+# WinSW requires the exe + xml to share a basename.
+function Install-CliExecutorWinSw {
+    param([string]$SrcDir, [string]$InstallDir)
+
+    $logDir = Join-Path $InstallDir 'logs'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+    $srcExe = Join-Path $SrcDir 'griphook-win-service.exe'
+    if (-not (Test-Path $srcExe)) { throw "WinSW exe not found at $srcExe" }
+
+    $exeDst = Join-Path $InstallDir 'griphook-cli-executor.exe'
+    Copy-Item -Force $srcExe $exeDst
+
+    $xml = @(
+        '<service>',
+        '  <id>GriphookCliExecutor</id>',
+        '  <name>Griphook CLI Executor</name>',
+        '  <description>GRIPHOOK remote command runner (cli-executor, daemon mode)</description>',
+        '  <executable>cmd.exe</executable>',
+        '  <arguments>/c "%BASE%\cli-executor-start.bat"</arguments>',
+        '  <workingdirectory>%BASE%</workingdirectory>',
+        '  <logpath>%BASE%\logs</logpath>',
+        '  <log mode="roll-by-size">',
+        '    <sizeThreshold>10240</sizeThreshold>',
+        '    <keepFiles>8</keepFiles>',
+        '  </log>',
+        '  <startmode>Automatic</startmode>',
+        '</service>'
+    )
+    $xmlDst = Join-Path $InstallDir 'griphook-cli-executor.xml'
+    Set-Content -Path $xmlDst -Value $xml -Encoding ASCII
+    Write-Success "WinSW installed: $exeDst"
+}
+
+function Stop-ExistingCliExecutorServiceForReinstall {
+    $name = 'GriphookCliExecutor'
+    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return }
+    Write-Info "Stopping existing service: $name"
+    try { Stop-Service -Name $name -Force -ErrorAction Stop } catch { }
+    $deadline = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $deadline) {
+        $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if ($null -eq $s) { break }
+        if ($s.Status -eq 'Stopped') { break }
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Info "Deleting existing service: $name"
+    & sc.exe delete $name 2>&1 | Out-Null
+    Start-Sleep -Seconds 1
+}
+
+function New-CliExecutorService {
+    param([string]$InstallDir)
+
+    if (-not (Test-Path (Join-Path $InstallDir 'cli-executor.jar'))) {
+        throw "cli-executor.jar not found in $InstallDir - did Build-CliExecutor succeed?"
+    }
+
+    $winswExe = Join-Path $InstallDir 'griphook-cli-executor.exe'
+    $svc = Get-Service -Name 'GriphookCliExecutor' -ErrorAction SilentlyContinue
+    if ($null -ne $svc) {
+        Write-Info 'Removing existing GriphookCliExecutor service...'
+        & $winswExe stop 2>&1 | Out-Null
+        & $winswExe uninstall 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
+    }
+
+    Write-Info 'Creating service: GriphookCliExecutor'
+    & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for GriphookCliExecutor (exit $LASTEXITCODE)" }
+    Write-Success "Service 'GriphookCliExecutor' created"
+}
+
+function Start-CliExecutorService {
+    Write-Info 'Starting GriphookCliExecutor...'
+    Start-Service -Name 'GriphookCliExecutor'
+    Write-Success 'Service started'
+}
+
+function Write-CliExecutorNextSteps {
+    param([string]$InstallDir)
+
+    Write-Host ''
+    Write-Host '============================================' -ForegroundColor Green
+    Write-Host '    CLI Executor Installation Complete      ' -ForegroundColor Green
+    Write-Host '============================================' -ForegroundColor Green
+    Write-Host ''
+    Write-Host '  Install dir: ' -NoNewline -ForegroundColor Cyan
+    Write-Host $InstallDir
+    Write-Host '  Config file: ' -NoNewline -ForegroundColor Cyan
+    Write-Host (Join-Path $InstallDir '.env')
+    Write-Host '  Logs:        ' -NoNewline -ForegroundColor Cyan
+    Write-Host (Join-Path $InstallDir 'logs')
+    Write-Host ''
+    Write-Host '  Service management:' -ForegroundColor Cyan
+    Write-Host '    Start-Service GriphookCliExecutor'
+    Write-Host '    Stop-Service  GriphookCliExecutor'
+    Write-Host '    Get-Service   GriphookCliExecutor'
+    Write-Host ''
+    Write-Host '  To edit configuration:' -ForegroundColor Cyan
+    Write-Host "    notepad $(Join-Path $InstallDir '.env')"
+    Write-Host '    Restart-Service GriphookCliExecutor'
+    Write-Host ''
+
+    if ($CeRunnerUrl) {
+        Write-Host '  Mode: ' -NoNewline -ForegroundColor Cyan
+        Write-Host 'Daemon (calls runner-agent outbound)' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '    RUNNER_URL:      ' -NoNewline -ForegroundColor Cyan
+        Write-Host $CeRunnerUrl -ForegroundColor Yellow
+        Write-Host '    EXECUTOR_ID:     ' -NoNewline -ForegroundColor Cyan
+        Write-Host $CeExecutorId -ForegroundColor Yellow
+        Write-Host '    EXECUTOR_TOKEN:  ' -NoNewline -ForegroundColor Cyan
+        Write-Host $CeExecutorToken -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  Check the executor is ONLINE on the runner-agent:' -ForegroundColor Cyan
+        Write-Host "    curl $CeRunnerUrl/executors -H 'Authorization: Bearer <AGENT_TOKEN>'"
+        Write-Host "  (look for executor id=$CeExecutorId status=ONLINE)" -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  ============================================' -ForegroundColor Green
+        Write-Host '      Remote Executor (Daemon Mode)        ' -ForegroundColor Green
+        Write-Host '  ============================================' -ForegroundColor Green
+        Write-Host ''
+        Write-Host '  EXECUTOR_TOKEN: ' -NoNewline -ForegroundColor Cyan
+        Write-Host $CeExecutorToken -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  The token is shown ONCE when you create the executor in the' -ForegroundColor DarkGray
+        Write-Host '  agent UI. If you lose it, delete + recreate the executor there.' -ForegroundColor DarkGray
+    } else {
+        Write-Host '  Mode: ' -NoNewline -ForegroundColor Cyan
+        Write-Host "Inbound (agent calls this host on port $CePort)" -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  Health check:' -ForegroundColor Cyan
+        Write-Host "    curl http://localhost:$CePort/executor/health"
+        Write-Host ''
+        Write-Host '  ============================================' -ForegroundColor Green
+        Write-Host '         Your CLI Executor Token           ' -ForegroundColor Green
+        Write-Host '  ============================================' -ForegroundColor Green
+        Write-Host ''
+        Write-Host '  SPRING_APPLICATION_TOKEN: ' -NoNewline -ForegroundColor Cyan
+        Write-Host $CeToken -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  Send this token in the POST /executor/run body (not a header).' -ForegroundColor DarkGray
+    }
+    Write-Host ''
+    Write-Host "  Documentation: https://github.com/$GithubRepo" -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+function Install-CliExecutor {
+    Write-Info 'Installing CLI Executor (remote command runner)...'
+
+    Install-Java
+    Install-Git
+
+    New-Item -ItemType Directory -Force -Path $CliExecutorDir | Out-Null
+    $srcDir = Join-Path $CliExecutorDir 'src'
+
+    Get-Sources -Destination $srcDir
+    Build-CliExecutor -SrcDir $srcDir -InstallDir $CliExecutorDir
+
+    Import-CliExecutorConfig -EnvPath (Join-Path $CliExecutorDir '.env')
+    Prompt-CliExecutorConfig -InstallDir $CliExecutorDir
+    Write-CliExecutorEnv -InstallDir $CliExecutorDir
+    Write-CliExecutorLauncher -InstallDir $CliExecutorDir
+
+    if ($SkipServices) {
+        Write-Warn 'Skipping service creation (-SkipServices set)'
+    } else {
+        Stop-ExistingCliExecutorServiceForReinstall
+        Install-CliExecutorWinSw -SrcDir $srcDir -InstallDir $CliExecutorDir
+        New-CliExecutorService -InstallDir $CliExecutorDir
+        Start-CliExecutorService
+    }
+
+    Write-CliExecutorNextSteps -InstallDir $CliExecutorDir
+}
+
 # -- Main -------------------------------------------------------------------
 function Main {
     Write-Banner
     Assert-Admin
     Assert-Winget
+
+    # Top-level product choice. -CliExecutor skips the prompt.
+    $installCliExecutor = [bool]$CliExecutor
+    if (-not $installCliExecutor) {
+        Write-Host ''
+        Write-Host 'What would you like to install?' -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host '  1) GRIPHOOK       - the full agent + control center UI' -ForegroundColor White
+        Write-Host '  2) CLI Executor   - remote command runner (connects to a GRIPHOOK agent)' -ForegroundColor White
+        Write-Host ''
+        $ans = Read-Host 'Enter choice [1, 2] (default 1)'
+        if ($ans -eq '2') { $installCliExecutor = $true }
+    }
+
+    if ($installCliExecutor) {
+        Install-CliExecutor
+        return
+    }
 
     Install-Java
     if (-not $SkipUI) { Install-Node }
@@ -751,8 +1129,22 @@ function Main {
     Write-NextSteps -InstallDir $InstallDir -AgentOnly:$SkipUI
 }
 
+# Keep the window open so the user can read/copy the token + next steps.
+# install.ps1 prints the agent token at the very end of Write-NextSteps;
+# without this pause the window closes immediately when run via the
+# `irm | iex` one-liner (or via install.bat, where the child PowerShell
+# process exits before install.bat's own pause fires). Skipped with
+# -NoPause for CI / automation.
+function Wait-BeforeExit {
+    if ($NoPause) { return }
+    Write-Host ''
+    Write-Host 'Press Enter to exit...' -ForegroundColor DarkGray
+    try { [void](Read-Host) } catch { }
+}
+
 try {
     Main
+    Wait-BeforeExit
 } catch {
     Write-Host ''
     Write-Err $_.Exception.Message
@@ -760,5 +1152,6 @@ try {
     Write-Host '  Installation failed. See the error above.' -ForegroundColor Yellow
     Write-Host "  For help, open an issue at: https://github.com/$GithubRepo/issues" -ForegroundColor Yellow
     Write-Host ''
+    Wait-BeforeExit
     exit 1
 }
