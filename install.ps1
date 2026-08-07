@@ -17,13 +17,6 @@
     already have a UI instance elsewhere and just want to add another
     agent to it. One UI can manage multiple agents via the Add Agent
     page in the dashboard.
-.PARAMETER SkipPostgres
-    Skip the PostgreSQL db/user initialization + the manual-install
-    instructions. The installer does NOT install PostgreSQL for you -
-    install it separately (see the printed instructions). Use this switch
-    only if you have already set up Postgres + the app db/user
-    yourself, or if you configure SPRING_DATASOURCE_* in griphook-start.bat
-    manually.
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
@@ -34,8 +27,7 @@ param(
     [string]$Method = 'source',
     [string]$InstallDir = "${env:ProgramData}\Griphook",
     [switch]$SkipServices,
-    [switch]$SkipUI,
-    [switch]$SkipPostgres
+    [switch]$SkipUI
 )
 
 $ErrorActionPreference = 'Stop'
@@ -93,36 +85,6 @@ function Assert-Winget {
         exit 1
     }
     Write-Success 'winget is available'
-}
-
-# Pre-flight: tell the user PostgreSQL is required BEFORE we install Java /
-# clone / build anything. The backend is Postgres-only (see application.yml).
-# We do NOT probe PATH for psql - on Windows the Postgres installer often
-# doesn't add bin/ to PATH even when PG is installed, so a PATH probe is
-# unreliable. Just print the requirement + ask the user to confirm.
-function Assert-Postgres {
-    Write-Host ''
-    Write-Host '============================================' -ForegroundColor Yellow
-    Write-Host '  Prerequisite: PostgreSQL required       ' -ForegroundColor Yellow
-    Write-Host '============================================' -ForegroundColor Yellow
-    Write-Host '  The backend is Postgres-only. You MUST have PostgreSQL' -ForegroundColor White
-    Write-Host '  installed + running on localhost:' -ForegroundColor White
-    Write-Host "    port:      $PgPort (default)" -ForegroundColor DarkGray
-    Write-Host '    superuser:  postgres' -ForegroundColor DarkGray
-    Write-Host '  The installer will create the app db + role the backend uses' -ForegroundColor DarkGray
-    Write-Host "  (defaults: db '$PgAppDb', user '$PgAppUser', password prompted)." -ForegroundColor DarkGray
-    Write-Host ''
-    Write-Host '  If you do NOT have PostgreSQL installed yet:' -ForegroundColor Cyan
-    Write-Host '    winget install -e --id PostgreSQL.PostgreSQL.16' -ForegroundColor DarkGray
-    Write-Host '    (or download from https://www.postgresql.org/download/windows/)' -ForegroundColor DarkGray
-    Write-Host ''
-    $ans = Read-Host '  Have you installed PostgreSQL + is it running? (y/n)'
-    if ($ans -notmatch '^[yY]') {
-        Write-Err 'PostgreSQL not ready. Install it, then re-run install.bat.'
-        Write-Host ''
-        exit 1
-    }
-    Write-Success 'PostgreSQL confirmed by user'
 }
 
 # -- PATH refresh (after package installs) ----------------------------------
@@ -244,39 +206,6 @@ function Install-Git {
     Write-Success 'Git installed'
 }
 
-# -- PostgreSQL --------------------------------------------------------------
-# The backend is Postgres-only (see application.yml). The installer does NOT
-# install PostgreSQL for you - install it manually first (winget one-liner
-# below), then this installer creates the app db+user the app uses
-# (defaults: db 'runner', user 'runner', password prompted - all editable).
-# If psql is not on PATH when this installer runs, it prints manual
-# instructions + skips db init (the backend service will fail to start
-# until you install Postgres + re-run).
-$RequiredPgVer = 16
-$PgSuperPassword = 'postgres'
-$PgAppDb    = 'runner'
-$PgAppUser  = 'runner'
-$PgAppPass  = 'runner'
-$PgPort     = 5432
-
-function Write-PostgresInstructions {
-    Write-Host ''
-    Write-Host '  PostgreSQL required (not installed / psql not on PATH)' -ForegroundColor Yellow
-    Write-Host '  The backend is Postgres-only. Install it, then re-run this installer.' -ForegroundColor DarkGray
-    Write-Host ''
-    Write-Host '  Option A - winget (elevated PowerShell):' -ForegroundColor Cyan
-    Write-Host "    winget install -e --id PostgreSQL.PostgreSQL.$RequiredPgVer --override `"--mode unattended --superpassword $PgSuperPassword --serverport $PgPort`""
-    Write-Host ''
-    Write-Host '  Option B - download the installer:' -ForegroundColor Cyan
-    Write-Host '    https://www.postgresql.org/download/windows/'
-    Write-Host ''
-    Write-Host '  After install, open a NEW terminal (so PATH refreshes) + re-run:' -ForegroundColor Cyan
-    Write-Host '    install.bat'
-    Write-Host ''
-    Write-Host "  The installer will then create the '$PgAppUser' role + '$PgAppDb' database the backend expects." -ForegroundColor DarkGray
-    Write-Host ''
-}
-
 # If the backend launcher (griphook-start.bat) already exists from a previous
 # install, read its -D lines into the script-scope vars so re-runs default
 # to whatever the user already chose. No .env file is used - all config is
@@ -294,109 +223,6 @@ function Import-CredsFromLauncher {
         elseif ($l -match '^\s*-DSERVER_PORT=(.*)$') {
             $script:ExistingPort = $matches[1].TrimEnd(' ').TrimEnd('^').TrimEnd(' ').Trim('"')
         }
-        elseif ($l -match '^\s*-DSPRING_DATASOURCE_URL=(.*)$') {
-            $url = $matches[1].TrimEnd(' ').TrimEnd('^').TrimEnd(' ').Trim('"')
-            if ($url -match '/([^/]+)$') { $script:PgAppDb = $matches[1] }
-        }
-        elseif ($l -match '^\s*-DSPRING_DATASOURCE_USERNAME=(.*)$') {
-            $script:PgAppUser = $matches[1].TrimEnd(' ').TrimEnd('^').TrimEnd(' ').Trim('"')
-        }
-        elseif ($l -match '^\s*-DSPRING_DATASOURCE_PASSWORD=(.*)$') {
-            $script:PgAppPass = $matches[1].TrimEnd(' ').TrimEnd('^').TrimEnd(' ').Trim('"')
-        }
-    }
-}
-
-# Wait until Postgres accepts connections (psql probe).
-function Wait-PostgresReady {
-    $psql = Resolve-OnPath 'psql'
-    if (-not $psql) { throw "psql not on PATH - cannot probe Postgres readiness" }
-    $env:PGPASSWORD = $PgSuperPassword
-    $deadline = (Get-Date).AddSeconds(60)
-    while ((Get-Date) -lt $deadline) {
-        $out = & $psql -h localhost -p $PgPort -U postgres -tAc "SELECT 1" 2>&1
-        if ($LASTEXITCODE -eq 0 -and "$out".Trim() -eq '1') {
-            Remove-Item Env:PGPASSWORD
-            return
-        }
-        Start-Sleep -Seconds 2
-    }
-    Remove-Item Env:PGPASSWORD
-    throw "Postgres did not become ready within 60s"
-}
-
-# Create the app db + user (idempotent). Only runs when psql is on PATH.
-# Uses the script-scope $PgAppDb/$PgAppUser/$PgAppPass/$PgSuperPassword vars
-# (defaults or overridden by Prompt-Config prompts). Validates db/user names
-# as simple identifiers + escapes the password for SQL string literals.
-function Initialize-PostgresDb {
-    $psql = Resolve-OnPath 'psql'
-    if (-not $psql) {
-        Write-PostgresInstructions
-        return
-    }
-
-    # Validate db + user names as simple SQL identifiers to avoid injection
-    # through identifier positions (CREATE ROLE <name>, CREATE DATABASE <name>).
-    foreach ($n in @($PgAppDb, $PgAppUser)) {
-        if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
-            throw "Invalid PostgreSQL identifier '$n' - use letters, digits, underscore, starting with a letter/underscore."
-        }
-    }
-    # Escape single quotes in the password for the SQL string literal.
-    $pgPassEsc = $PgAppPass -replace "'", "''"
-
-    Write-Info 'Initializing PostgreSQL database...'
-    Wait-PostgresReady
-
-    # Show the user exactly what we're about to run (creds redacted).
-    Write-Host '  SQL to run (as superuser "postgres"):' -ForegroundColor DarkGray
-    Write-Host '    DO $$ BEGIN' -ForegroundColor DarkGray
-    Write-Host '      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''' -NoNewline -ForegroundColor DarkGray
-    Write-Host $PgAppUser -NoNewline -ForegroundColor Cyan
-    Write-Host ''') THEN' -ForegroundColor DarkGray
-    Write-Host '        CREATE ROLE ' -NoNewline -ForegroundColor DarkGray
-    Write-Host $PgAppUser -NoNewline -ForegroundColor Cyan
-    Write-Host ' WITH LOGIN PASSWORD ''<redacted>'';' -ForegroundColor DarkGray
-    Write-Host '      END IF;' -ForegroundColor DarkGray
-    Write-Host '    END $$;' -ForegroundColor DarkGray
-    Write-Host '    CREATE DATABASE ' -NoNewline -ForegroundColor DarkGray
-    Write-Host $PgAppDb -NoNewline -ForegroundColor Cyan
-    Write-Host ' OWNER ' -NoNewline -ForegroundColor DarkGray
-    Write-Host $PgAppUser -ForegroundColor Cyan
-    Write-Host '  (skipped if database already exists)' -ForegroundColor DarkGray
-
-    $env:PGPASSWORD = $PgSuperPassword
-    try {
-        # 1. Create the app role (idempotent via DO block). Regular
-        #    single-quoted multi-line string (NOT a here-string, which
-        #    needs CRLF and breaks when the wrapper downloads LF line
-        #    endings). $$ is literal in single-quoted strings.
-        $roleSql = 'DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''__PGUSER__'') THEN
-    CREATE ROLE __PGUSER__ WITH LOGIN PASSWORD ''__PGPASS__'';
-  END IF;
-END $$;'
-        $roleSql = $roleSql.Replace('__PGUSER__', $PgAppUser).Replace('__PGPASS__', $pgPassEsc)
-        $roleFile = Join-Path $env:TEMP 'griphook-pg-role.sql'
-        Set-Content -Path $roleFile -Value $roleSql -Encoding ASCII
-        & $psql -h localhost -p $PgPort -U postgres -f $roleFile 2>&1 |
-            ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-        Remove-Item -Force $roleFile -ErrorAction SilentlyContinue
-        Write-Success "Role '$PgAppUser' ready (created or already existed)"
-
-        # 2. Create database if it doesn't exist (CREATE DATABASE can't run
-        #    inside a transaction/DO block, so probe + create).
-        $exists = (& $psql -h localhost -p $PgPort -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$PgAppDb'").Trim()
-        if ($exists -ne '1') {
-            & $psql -h localhost -p $PgPort -U postgres -c "CREATE DATABASE $PgAppDb OWNER $PgAppUser" 2>&1 |
-                ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-            Write-Success "Created database '$PgAppDb' (owner: $PgAppUser)"
-        } else {
-            Write-Success "Database '$PgAppDb' already exists"
-        }
-    } finally {
-        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
     }
 }
 
@@ -590,28 +416,6 @@ function Prompt-Config {
     }
     $script:ServerPort = "$portInt"
 
-    Write-Host ''
-    Write-Host '4. PostgreSQL (the backend is Postgres-only)'
-    Write-Host '   The installer creates a database + login role the backend will use.' -ForegroundColor DarkGray
-    Write-Host '   You must have already installed PostgreSQL (see the printed instructions if not).' -ForegroundColor DarkGray
-    Write-Host "   Superuser password [${PgSuperPassword}]:" -NoNewline
-    Write-Host ' (used to connect as postgres + create the app role/db)' -ForegroundColor DarkGray
-    $pgSuper = Read-Host "   Enter PostgreSQL superuser (postgres) password [${PgSuperPassword}]"
-    if ([string]::IsNullOrWhiteSpace($pgSuper)) { $pgSuper = $PgSuperPassword }
-    $script:PgSuperPassword = $pgSuper
-
-    $pgDb = Read-Host "   Enter app database name [${PgAppDb}]"
-    if ([string]::IsNullOrWhiteSpace($pgDb)) { $pgDb = $PgAppDb }
-    $script:PgAppDb = $pgDb
-
-    $pgUser = Read-Host "   Enter app user name [${PgAppUser}]"
-    if ([string]::IsNullOrWhiteSpace($pgUser)) { $pgUser = $PgAppUser }
-    $script:PgAppUser = $pgUser
-
-    $pgPass = Read-Host "   Enter app user password [${PgAppPass}]"
-    if ([string]::IsNullOrWhiteSpace($pgPass)) { $pgPass = $PgAppPass }
-    $script:PgAppPass = $pgPass
-
     # Stash for the launcher writer.
     $script:CfgApiKey = $apiKey
     $script:CfgToken  = $token
@@ -662,7 +466,12 @@ function Write-BackendLauncher {
     param([string]$InstallDir, [string]$JavaExe)
 
     $tempDir = $env:TEMP
-    $dsUrl   = "jdbc:postgresql://localhost:${PgPort}/${PgAppDb}"
+    # Embedded SQLite: no DB server, no credentials. The DB file lives
+    # under the install dir so it survives service restarts + is easy to
+    # back up. WAL + busy_timeout match application.yml defaults.
+    $dataDir = Join-Path $InstallDir 'data'
+    New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+    $dsUrl   = "jdbc:sqlite:$dataDir\runner.db?journal_mode=WAL&busy_timeout=5000"
     $bat = @(
         '@echo off',
         'rem GRIPHOOK backend launcher (generated by install.ps1).',
@@ -679,8 +488,6 @@ function Write-BackendLauncher {
         '  -DAGENT_ADK_MODEL="gemini-2.0-flash" ^',
         '  -DAGENT_ADK_ENABLED="true" ^',
         "  -DSPRING_DATASOURCE_URL=`"$dsUrl`" ^",
-        "  -DSPRING_DATASOURCE_USERNAME=`"$PgAppUser`" ^",
-        "  -DSPRING_DATASOURCE_PASSWORD=`"$PgAppPass`" ^",
         '  -jar "%~dp0griphook-agent.jar"'
     )
     $path = Join-Path $InstallDir 'griphook-start.bat'
@@ -846,17 +653,8 @@ function Write-NextSteps {
     Write-Host '  Logs:        ' -NoNewline -ForegroundColor Cyan
     Write-Host (Join-Path $InstallDir 'logs')
     Write-Host ''
-    Write-Host '  Database (PostgreSQL):' -ForegroundColor Cyan
-    if (Resolve-OnPath 'psql') {
-        Write-Host "    Connect:    jdbc:postgresql://localhost:$PgPort/$PgAppDb"
-        Write-Host "    App user:   $PgAppUser  (password: $PgAppPass)"
-        Write-Host "    Superuser:  postgres   (password: $PgSuperPassword)"
-    } else {
-        Write-Host "    NOT installed - backend will fail to start until you install Postgres" -ForegroundColor Yellow
-        Write-Host "    Install (elevated PowerShell):" -ForegroundColor Cyan
-        Write-Host "      winget install -e --id PostgreSQL.PostgreSQL.$RequiredPgVer --override `"--mode unattended --superpassword $PgSuperPassword --serverport $PgPort`""
-        Write-Host "    Then re-run: install.bat" -ForegroundColor Cyan
-    }
+    Write-Host '  Database (SQLite, embedded):' -ForegroundColor Cyan
+    Write-Host "    $(Join-Path $InstallDir 'data\runner.db')"
     Write-Host ''
     Write-Host '  Service management:' -ForegroundColor Cyan
     Write-Host "    Start-Service $BackendServiceName"
@@ -915,14 +713,6 @@ function Main {
     Assert-Admin
     Assert-Winget
 
-    # Pre-flight: tell the user PostgreSQL is required BEFORE we install
-    # Java / clone / build anything. If psql is not on PATH + the user
-    # didn't pass -SkipPostgres, print instructions + abort so they don't
-    # waste a build before discovering the db prerequisite.
-    if (-not $SkipPostgres) {
-        Assert-Postgres
-    }
-
     Install-Java
     if (-not $SkipUI) { Install-Node }
     Install-Git
@@ -943,12 +733,6 @@ function Main {
     # the launcher .bat. No .env file - all config baked into the .bat.
     Import-CredsFromLauncher -LauncherPath (Join-Path $InstallDir 'griphook-start.bat')
     Prompt-Config -InstallDir $InstallDir
-
-    # Create the app db+user the backend uses. The installer does NOT
-    # install PostgreSQL itself - if psql is not on PATH, this prints
-    # manual install instructions + skips. Skip with -SkipPostgres to
-    # suppress the instructions (you manage Postgres yourself).
-    if (-not $SkipPostgres) { Initialize-PostgresDb }
 
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'

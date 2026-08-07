@@ -1,0 +1,6 @@
+# Register the SQLite parent-directory creator as an EnvironmentPostProcessor so it
+# runs before any bean (DataSource/EntityManagerFactory) is created. Spring Boot 3.x
+# still loads EnvironmentPostProcessors from spring.factories (not the .imports file,
+# which is reserved for AutoConfigurations).
+org.springframework.boot.env.EnvironmentPostProcessor=\
+dev.runner.agent.config.SqliteDirEnvironmentPostProcessor

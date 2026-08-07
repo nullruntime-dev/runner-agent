@@ -37,6 +37,20 @@
                   .body(Map.of("error", ex.getMessage()));
       }
 
+      @ExceptionHandler(ExecutorNotFoundException.class)
+      public ResponseEntity<Map<String, String>> handleExecutorNotFound(ExecutorNotFoundException ex) {
+          log.warn("Executor not found: {}", ex.getMessage());
+          return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                  .body(Map.of("error", ex.getMessage()));
+      }
+
+      @ExceptionHandler(ExecutorAuthException.class)
+      public ResponseEntity<Map<String, String>> handleExecutorAuth(ExecutorAuthException ex) {
+          log.warn("Executor auth failed: {}", ex.getMessage());
+          return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                  .body(Map.of("error", ex.getMessage()));
+      }
+
       @ExceptionHandler(AgentException.class)
       public ResponseEntity<Map<String, String>> handleAgentException(AgentException ex) {
           log.error("Agent error: {}", ex.getMessage(), ex);

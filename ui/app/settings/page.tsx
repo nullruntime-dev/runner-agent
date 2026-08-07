@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import SetupWizard from '@/components/SetupWizard';
 import SkillsManagement from '@/components/SkillsManagement';
 import DatabaseManagement from '@/components/DatabaseManagement';
+import ExecutorsManagement from '@/components/ExecutorsManagement';
 import { getAgents, getAIConfig, updateAIConfig, AIProviderConfig } from '@/lib/api';
 
 interface EnvConfig {
@@ -561,6 +562,22 @@ export default function SettingsPage() {
             </div>
             <div className="p-6">
               <DatabaseManagement />
+            </div>
+          </section>
+
+          {/* Remote Executors */}
+          <section className="border border-[#1a1a1a] bg-[#0f0f0f]">
+            <div className="px-6 py-4 border-b border-[#1a1a1a]">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-[#00aaff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                </svg>
+                Remote Executors
+              </h2>
+              <p className="text-sm text-neutral-500 mt-1">Register remote machines (via a daemon) so the agent can run shell commands on them through the <code className="text-[#00fff2]">execute_on_executor</code> tool</p>
+            </div>
+            <div className="p-6">
+              <ExecutorsManagement />
             </div>
           </section>
 

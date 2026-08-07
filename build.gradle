@@ -35,9 +35,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
-    // Database: PostgreSQL only. The JDBC URL is configured via
-    // SPRING_DATASOURCE_URL (see application.yml).
-    runtimeOnly 'org.postgresql:postgresql'
+    // Database: SQLite (embedded file, no server). The JDBC URL is configured via
+    // SPRING_DATASOURCE_URL (see application.yml). hibernate-community-dialects
+    // supplies the SQLiteDialect (not in Hibernate core).
+    runtimeOnly 'org.xerial:sqlite-jdbc'
+    runtimeOnly 'org.hibernate.orm:hibernate-community-dialects'
 
     // Google ADK for AI agent
     implementation 'com.google.adk:google-adk:0.9.0'

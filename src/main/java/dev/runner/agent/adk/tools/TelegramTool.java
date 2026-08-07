@@ -28,8 +28,9 @@ import java.util.Optional;
 /**
  * ADK tool that lets the agent send messages via Telegram.
  * Read-only access to the bot config; delegates actual send to {@link TelegramBotService}.
- * Uses ObjectProvider so the app still boots when telegram.enabled=false (the
- * TelegramBotService bean is absent in that case).
+ * The bot bean is always present; whether it's actually connected (a BotSession
+ * is registered for a non-empty DB token) is checked at call time via
+ * {@link TelegramBotService#isConnected()}.
  */
 @Slf4j
 @Component
@@ -42,8 +43,7 @@ public class TelegramTool {
                         dev.runner.agent.service.SkillService skillService) {
         this.telegramBotServiceProvider = telegramBotServiceProvider;
         this.skillService = skillService;
-        log.info("TelegramTool initialized (telegram.enabled={})",
-                telegramBotServiceProvider.getIfAvailable() != null ? "true" : "false");
+        log.info("TelegramTool initialized");
     }
 
     private TelegramBotService bot() {
@@ -51,12 +51,9 @@ public class TelegramTool {
     }
 
     private boolean isConfigured() {
-        // Trust the actual bot session state, not the DB row. The Spring
-        // telegrambots starter registers the BotSession at startup and does
-        // NOT unregister it when the skill_configs row is later disabled or
-        // deleted - so a running bot with a disabled row would otherwise make
-        // this check return false and every send_telegram_message call fail
-        // with "Telegram is not configured" even though the bot is live.
+        // Trust the actual bot session state, not the DB row. The session is
+        // registered only while a non-empty token is in the DB; if the token is
+        // cleared/changed the session is stopped, so this reflects live state.
         TelegramBotService b = bot();
         return b != null && b.isConnected();
     }

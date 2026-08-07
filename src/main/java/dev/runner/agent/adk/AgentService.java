@@ -250,6 +250,11 @@ public class AgentService {
             - web_search_site(query, site): restrict to a specific domain.
             - search_and_fetch(query, urls, num_results, max_pages): runs web_search AND fetches the full content of the given URLs in parallel. Returns search results + cleaned page content + page links. Use this when snippets aren't enough and you need to read specific pages in full (e.g. a job listing, an article, a doc page). The agent fetches, cleans HTML to text, and extracts links for you — you don't need to run execute_commands with curl.
             Prefer search_and_fetch over (web_search then execute_commands with curl then readLogs) — it's one tool call instead of three.
+
+            REMOTE EXECUTOR TOOLS (run commands on other machines via a daemon):
+            - list_executors(): list all configured remote executors and their online/offline status. ALWAYS call this first to discover executor names.
+            - execute_on_executor(executor_name, command, timeout_sec): run a shell command on a named remote executor. The executor must be online. CAREFUL: runs with the daemon's privileges on the remote machine.
+            Use these when the user wants to run something on a remote/server they've registered as an executor. If no executors are configured, tell the user to add one in Settings.
             """;
 
     private volatile InMemoryRunner runner;
@@ -281,6 +286,7 @@ public class AgentService {
             ScheduleTool scheduleTool,
             WebSearchTool webSearchTool,
             HostExecTool hostExecTool,
+            RemoteExecTool remoteExecTool,
             ChatService chatService
     ) {
         log.info("Initializing ADK AgentService");
@@ -303,9 +309,7 @@ public class AgentService {
         tools.add(FunctionTool.create(slackTool, "sendDeploymentNotification"));
         log.info("Slack integration tools registered (configuration checked at runtime)");
 
-        // Telegram tool (configuration checked at runtime). The bean is
-        // absent when telegram.enabled=false, so the tool list skips it
-        // instead of failing context init.
+        // Telegram tool (configuration checked at runtime via isConnected()).
         TelegramTool telegramTool = telegramToolProvider.getIfAvailable();
         if (telegramTool != null) {
             tools.add(FunctionTool.create(telegramTool, "sendMessage"));
@@ -313,7 +317,7 @@ public class AgentService {
             tools.add(FunctionTool.create(telegramTool, "listAllowedChats"));
             log.info("Telegram integration tools registered (configuration checked at runtime)");
         } else {
-            log.info("Telegram integration tools skipped (telegram.enabled=false)");
+            log.info("Telegram integration tools skipped (TelegramTool bean absent)");
         }
 
         // Gmail SMTP tools
@@ -374,6 +378,11 @@ public class AgentService {
         tools.add(FunctionTool.create(webSearchTool, "searchSite"));
         tools.add(FunctionTool.create(webSearchTool, "searchAndFetch"));
         log.info("Web Search tools registered");
+
+        // Remote Executor tools (execute commands on daemon-registered machines)
+        tools.add(FunctionTool.create(remoteExecTool, "executeOnExecutor"));
+        tools.add(FunctionTool.create(remoteExecTool, "listExecutors"));
+        log.info("Remote Executor tools registered");
 
         // Initialize runner with current config
         rebuildRunner();

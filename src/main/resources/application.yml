@@ -21,22 +21,32 @@ ddgo:
   base-url: ${DDGO_BASE_URL:https://duckduckgo.com}
   html: ${DDGO_HTML:https://html.duckduckgo.com/html}
 
-# Telegram bot auto-registers with the Telegram API on startup via the
-# telegrambots Spring Boot starter. Gate the bean behind this flag so the
-# app doesn't 404 on startup when no bot token is configured. Set
-# -DTELEGRAM_ENABLED=true (or TELEGRAM_ENABLED env) once you've configured
-# a bot token in the dashboard.
-telegram:
-  enabled: ${TELEGRAM_ENABLED:false}
+# Note: the Telegram bot is now DB-driven, not gated by a yml/env flag.
+# It registers and polls iff a non-empty botToken is present in the
+# skill_configs row for "telegram" (configured via the dashboard). Token
+# and allowlist changes hot-reload every 5s.
 
 spring:
   datasource:
-    # PostgreSQL only. Default points at the local docker-compose `postgres` service.
-    # Override SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD for other environments.
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/runner}
-    username: ${SPRING_DATASOURCE_USERNAME:runner}
-    password: ${SPRING_DATASOURCE_PASSWORD:runner}
+    # SQLite (embedded file, no server). Override the path via SPRING_DATASOURCE_URL.
+    # WAL + busy_timeout let reads overlap with the single writer; pool size 1
+    # (set below) serializes writes so SQLite never returns SQLITE_BUSY.
+    url: ${SPRING_DATASOURCE_URL:jdbc:sqlite:./data/runner.db?journal_mode=WAL&busy_timeout=5000}
+    driver-class-name: org.sqlite.JDBC
+    username:
+    password:
+    hikari:
+      maximum-pool-size: 1
   jpa:
+    # OSIV off: the /daemon/{id}/work long-poll holds a request open for ~30s.
+    # With OSIV on (Spring Boot default) the Hibernate session — and the single
+    # pooled connection — is held for the whole DeferredResult wait, starving
+    # the @Scheduled offline sweep (and any other DB op) under pool-size 1.
+    # Off is also the recommended setting for a pure REST backend.
+    open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: update   # SQLite only supports ADD COLUMN; fine for fresh schema
+    properties:
+      hibernate:
+        dialect: org.hibernate.community.dialect.SQLiteDialect
     show-sql: false

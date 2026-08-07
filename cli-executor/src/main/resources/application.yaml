@@ -2,6 +2,13 @@ spring:
   application:
     name: cli-executor
 token:
-  token: ${SPRING_APPLICATION_TOKEN:1234}
+  token: ${SPRING_APPLICATION_TOKEN:}
 server:
   port: 8010
+runner:
+  url: ${RUNNER_URL:http://localhost:8009}      # runner-agent base url
+  executor-id: ${EXECUTOR_ID:}                  # numeric id from the UI modal
+  executor-token: ${EXECUTOR_TOKEN:}            # the one-time token from the UI modal
+#  RUNNER_URL=<your runner-agent base url>
+#  EXECUTOR_ID=1
+#  EXECUTOR_TOKEN=6bdd022cf3f049b4a2ac3d8edb4aeaee

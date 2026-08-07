@@ -20,15 +20,15 @@ import dev.runner.agent.config.AgentConfig;
 import dev.runner.agent.service.AIConfigService;
 import dev.runner.agent.service.ChatService;
 import dev.runner.agent.service.SkillService;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.BotSession;
+import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
-import org.telegram.telegrambots.longpolling.starter.AfterBotRegistration;
-import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -66,18 +66,22 @@ import java.util.stream.Collectors;
 
 /**
  * Telegram bot integration using long polling via the official
- * org.telegram:telegrambots Spring Boot starter.
+ * org.telegram:telegrambots library.
  *
- * Spring registers the bot on startup. We implement SpringLongPollingBot
- * + LongPollingSingleThreadUpdateConsumer; the library handles the polling
- * loop, offset management, and error backoff.
+ * DB-driven lifecycle: the bot registers and starts polling iff a non-empty
+ * botToken is present in the {@code skill_configs} row for "telegram". The
+ * token + allowlist are hot-reloaded every 5s so dashboard changes take effect
+ * without a restart. We deliberately do NOT implement SpringLongPollingBot so
+ * the Spring Boot starter's auto-scan finds zero bots and never calls the
+ * Telegram API with an empty token (which would 404 and crash the context);
+ * instead we register manually via {@link TelegramBotsLongPollingApplication}
+ * once the DB says a token is configured.
  *
  * Auth: allowlist only. Bot token alone does not grant access.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "telegram.enabled", havingValue = "true")
-public class TelegramBotService implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
+public class TelegramBotService implements LongPollingSingleThreadUpdateConsumer {
 
     private static final long MAX_CHUNK_SIZE = 4000L;
 
@@ -86,11 +90,22 @@ public class TelegramBotService implements SpringLongPollingBot, LongPollingSing
     private final AgentService agentService;
     private final ChatService chatService;
     private final AgentConfig agentConfig;
+    private final TelegramBotsLongPollingApplication botsApplication;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .build();
     private TelegramClient telegramClient;
     private volatile Set<Long> allowedUserIds;
+
+    // Currently registered bot session (null when no token is configured or
+    // registration failed). Guarded by synchronizing on `this` for register/
+    // unregister transitions.
+    private volatile BotSession session;
+    // The token the current session was registered with (null when none).
+    // We only re-register when this differs from the DB token, so a transient
+    // registration failure doesn't spam the log every 5s; re-saving the token
+    // (even the same value) in the dashboard forces a retry.
+    private volatile String registeredToken;
 
     // Per-chat timestamp of the last "Unauthorized" reply. Subsequent rejects
     // within UNAUTH_COOLDOWN_MS are logged only (no reply) to avoid feedback loops.
@@ -115,50 +130,104 @@ public class TelegramBotService implements SpringLongPollingBot, LongPollingSing
     public TelegramBotService(SkillService skillService,
                               @Lazy AgentService agentService,
                               ChatService chatService,
-                              AgentConfig agentConfig) {
+                              AgentConfig agentConfig,
+                              TelegramBotsLongPollingApplication botsApplication) {
         this.skillService = skillService;
         this.agentService = agentService;
         this.chatService = chatService;
         this.agentConfig = agentConfig;
+        this.botsApplication = botsApplication;
         log.info("TelegramBotService constructed");
     }
 
     /**
-     * Called by the Spring starter with our bot's token. We read the token
-     * from the persisted skill config. If unset we return a placeholder;
-     * the consume() path will drop everything until allowedUserIds is set.
+     * Read the bot token from the persisted skill config. Empty when the
+     * telegram skill is not yet configured via the dashboard.
      */
-    @Override
-    public String getBotToken() {
+    private String currentBotToken() {
         return skillService.getSkillConfig("telegram")
                 .map(c -> Optional.ofNullable(c.get("botToken")).orElse(""))
                 .orElse("");
     }
 
-    @Override
-    public LongPollingUpdateConsumer getUpdatesConsumer() {
-        return this;
+    /**
+     * On startup, sync the bot session against the DB and start the 5s
+     * hot-reload loop. The DB is the source of truth: a non-empty token
+     * registers + starts polling; an empty token keeps the bot idle. Token
+     * or allowlist changes in the dashboard take effect within 5s, no restart
+     * needed.
+     */
+    @PostConstruct
+    void init() {
+        syncSessionAndAllowlist();
+        scheduler.scheduleWithFixedDelay(this::syncSessionAndAllowlist, 5, 5, TimeUnit.SECONDS);
     }
 
-    @AfterBotRegistration
-    public void afterRegistration(BotSession botSession) {
-        log.info("Telegram bot registered, running={}", botSession.isRunning());
-        // Eagerly initialize the outgoing TelegramClient with the same token
-        // the starter used to register the bot. Without this, isConnected()
-        // stays false until the first outgoing send, so ADK tool calls that
-        // check isConnected() would fail even though the bot session is live.
-        String token = getBotToken();
-        if (token != null && !token.isBlank()) {
-            synchronized (this) {
-                if (telegramClient == null) {
-                    telegramClient = new OkHttpTelegramClient(token);
+    /**
+     * DB-driven session lifecycle + allowlist reload. Runs on startup and
+     * every 5s. Compares the DB token against the one currently registered;
+     * starts/stops/restarts the BotSession to match. Idempotent: if nothing
+     * changed, only the allowlist is refreshed.
+     */
+    private void syncSessionAndAllowlist() {
+        String dbToken = currentBotToken();
+        try {
+            if (!java.util.Objects.equals(dbToken, registeredToken)) {
+                // Token changed (set -> unset, unset -> set, or set -> different set).
+                if (session != null) {
+                    log.info("Telegram token changed ({} -> {}), stopping current bot session",
+                            mask(registeredToken), mask(dbToken));
+                    try {
+                        botsApplication.unregisterBot(registeredToken);
+                    } catch (Exception e) {
+                        log.warn("Failed to unregister old Telegram bot session: {}", e.getMessage());
+                    }
+                    session = null;
+                    telegramClient = null;
+                }
+                if (dbToken != null && !dbToken.isBlank()) {
+                    try {
+                        session = botsApplication.registerBot(dbToken, this);
+                        registeredToken = dbToken;
+                        synchronized (this) {
+                            telegramClient = new OkHttpTelegramClient(dbToken);
+                        }
+                        log.info("Telegram bot registered, running={}", session.isRunning());
+                    } catch (Exception e) {
+                        // Mark this token as attempted so we don't retry the identical
+                        // token every 5s. Re-saving the token in the dashboard forces a retry.
+                        registeredToken = dbToken;
+                        session = null;
+                        telegramClient = null;
+                        log.error("Failed to register Telegram bot (re-save the token in the dashboard to retry): {}", e.getMessage());
+                    }
+                } else {
+                    registeredToken = null;
+                    log.info("Telegram bot token not configured in DB; bot is idle");
                 }
             }
+        } catch (Exception e) {
+            log.error("Error syncing Telegram session", e);
         }
-        // Reload allowlist immediately so first messages after restart are checked against
-        // the latest DB state. Then poll every 5s for hot-reload.
+        // Always refresh the allowlist so dashboard user-id changes apply live.
         reloadAllowlist();
-        scheduler.scheduleWithFixedDelay(this::reloadAllowlist, 5, 5, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    void shutdown() {
+        scheduler.shutdownNow();
+        typingScheduler.shutdownNow();
+        BotSession s = session;
+        if (s != null) {
+            try { s.close(); } catch (Exception e) { log.warn("Error closing Telegram bot session", e); }
+        }
+    }
+
+    private static String mask(String token) {
+        if (token == null || token.isBlank()) return "<empty>";
+        // Show only the bot id prefix (everything before the first ':').
+        int colon = token.indexOf(':');
+        return colon > 0 ? token.substring(0, colon) + ":***" : "***";
     }
 
     private void reloadAllowlist() {
@@ -298,7 +367,7 @@ public class TelegramBotService implements SpringLongPollingBot, LongPollingSing
             return "Photo file path unavailable.";
         }
 
-        String token = getBotToken();
+        String token = currentBotToken();
         if (token.isBlank()) return "Bot token missing.";
         String downloadUrl = org.telegram.telegrambots.meta.api.objects.File.getFileUrl(token, filePath);
 
@@ -736,7 +805,7 @@ public class TelegramBotService implements SpringLongPollingBot, LongPollingSing
 
     private synchronized TelegramClient ensureClient() {
         if (telegramClient == null) {
-            String token = getBotToken();
+            String token = currentBotToken();
             if (token == null || token.isBlank()) return null;
             telegramClient = new OkHttpTelegramClient(token);
         }
