@@ -93,6 +93,7 @@ set "NO_PAUSE=0"
 if "%~1"=="" goto :doneParse
 if /I "%~1"=="-NoPause" (
     set "NO_PAUSE=1"
+    set "FORWARD_ARGS=!FORWARD_ARGS! -NoPause"
     shift
     goto :parseArgs
 )
@@ -173,6 +174,7 @@ echo     install.bat ^<options^>
 echo.
 echo   %C_DIM%Options:%C_RESET%
 echo     %C_CYAN%(no options)%C_RESET%      Interactive install with sensible defaults
+echo     %C_CYAN%-CliExecutor%C_RESET%     Install the CLI Executor (remote command runner)
 echo     %C_CYAN%-SkipUI%C_RESET%          Agent-only: don't install the Control Center UI
 echo     %C_CYAN%-SkipServices%C_RESET%    Don't register Windows services
 echo     %C_CYAN%-InstallDir DIR%C_RESET%  Custom install location (e.g. C:\Griphook)

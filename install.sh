@@ -67,10 +67,37 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Show installation method menu
+# Top-level menu: pick which product to install.
 show_menu() {
     echo ""
-    echo -e "${BOLD}Select installation method:${NC}"
+    echo -e "${BOLD}What would you like to install?${NC}"
+    echo ""
+    echo -e "  ${GREEN}1)${NC} ${BOLD}GRIPHOOK${NC} ${DIM}— the full agent + control center UI${NC}"
+    echo -e "     ${DIM}Runs the AI agent and the web dashboard you manage it from.${NC}"
+    echo ""
+    echo -e "  ${BLUE}2)${NC} ${BOLD}CLI Executor${NC} ${DIM}— remote command runner${NC}"
+    echo -e "     ${DIM}Deploys on a remote server + connects to a GRIPHOOK agent over HTTP.${NC}"
+    echo -e "     ${DIM}The agent runs shell commands on it via the execute_on_executor tool.${NC}"
+    echo ""
+    echo -e "  ${RED}q)${NC} ${BOLD}Quit${NC}"
+    echo ""
+
+    while true; do
+        echo -n "Enter choice [1, 2, q]: "
+        read choice < /dev/tty
+        case "$choice" in
+            1) show_main_menu; break ;;
+            2) INSTALL_METHOD="cli-executor"; break ;;
+            q|Q) echo "Cancelled."; exit 0 ;;
+            *) echo -e "${RED}Invalid choice. Please enter 1, 2, or q.${NC}" ;;
+        esac
+    done
+}
+
+# GRIPHOOK install method menu (shown after the top-level menu picks GRIPHOOK).
+show_main_menu() {
+    echo ""
+    echo -e "${BOLD}Select GRIPHOOK installation method:${NC}"
     echo ""
     echo -e "  ${GREEN}1)${NC} ${BOLD}Docker Compose${NC} ${GREEN}(Recommended)${NC}"
     echo -e "     ${DIM}Fastest setup. Runs agent + UI in containers.${NC}"
@@ -84,23 +111,19 @@ show_menu() {
     echo -e "  ${YELLOW}4)${NC} ${BOLD}Ubuntu Sandbox${NC}"
     echo -e "     ${DIM}Run in isolated Ubuntu container with systemd. Great for testing.${NC}"
     echo ""
-    echo -e "  ${BLUE}5)${NC} ${BOLD}CLI Executor${NC}"
-    echo -e "     ${DIM}Standalone command-runner microservice. Deploys on remote servers the agent reaches over HTTP. svcify on Linux, nssm.exe on Windows.${NC}"
-    echo ""
     echo -e "  ${RED}q)${NC} ${BOLD}Quit${NC}"
     echo ""
 
     while true; do
-        echo -n "Enter choice [1-5, q]: "
+        echo -n "Enter choice [1-4, q]: "
         read choice < /dev/tty
         case "$choice" in
             1) INSTALL_METHOD="docker"; break ;;
             2) INSTALL_METHOD="jar"; break ;;
             3) INSTALL_METHOD="source"; break ;;
             4) INSTALL_METHOD="sandbox"; break ;;
-            5) INSTALL_METHOD="cli-executor"; break ;;
             q|Q) echo "Cancelled."; exit 0 ;;
-            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, 4, 5, or q.${NC}" ;;
+            *) echo -e "${RED}Invalid choice. Please enter 1, 2, 3, 4, or q.${NC}" ;;
         esac
     done
 }
@@ -842,7 +865,9 @@ install_cli_executor_method() {
         exit 1
     fi
 
-    # Token: explicit > existing .env > auto-generate
+    # Inbound token (legacy POST /executor/run auth): explicit > existing .env > auto-generate.
+    # Only needed if runner-agent calls THIS cli-executor over the network; not used in
+    # daemon mode (where cli-executor calls runner-agent outbound).
     local ce_token="${CLI_EXECUTOR_TOKEN:-}"
     if [ -f "${ce_dir}/.env" ]; then
         ce_token=$(grep -E '^SPRING_APPLICATION_TOKEN=' "${ce_dir}/.env" 2>/dev/null | cut -d'=' -f2-)
@@ -855,18 +880,96 @@ install_cli_executor_method() {
         fi
     fi
 
-    # Create .env
-    if [ ! -f "${ce_dir}/.env" ]; then
-        if [ "$OS" == "windows" ]; then
-            printf 'SPRING_APPLICATION_TOKEN=%s\nSERVER_PORT=%s\n' "$ce_token" "$CLI_EXECUTOR_PORT" > "${ce_dir}/.env"
+    # Daemon mode: cli-executor calls runner-agent outbound (register + long-poll
+    # /work + post /results). This is how a remote server behind NAT/firewall
+    # becomes an executor the runner-agent agent can run commands on via the
+    # execute_on_executor tool. Requires three values from the runner-agent UI:
+    # Settings → Remote Executors → Add → copy the one-time token.
+    local daemon_url="${CLI_EXECUTOR_RUNNER_URL:-}"
+    local daemon_id="${CLI_EXECUTOR_EXECUTOR_ID:-}"
+    local daemon_token="${CLI_EXECUTOR_EXECUTOR_TOKEN:-}"
+
+    # Re-use values from an existing .env on re-run so prompts default to current config.
+    if [ -f "${ce_dir}/.env" ]; then
+        [ -z "$daemon_url" ]   && daemon_url=$(grep -E '^RUNNER_URL=' "${ce_dir}/.env" 2>/dev/null | cut -d'=' -f2-)
+        [ -z "$daemon_id" ]    && daemon_id=$(grep -E '^EXECUTOR_ID=' "${ce_dir}/.env" 2>/dev/null | cut -d'=' -f2-)
+        [ -z "$daemon_token" ] && daemon_token=$(grep -E '^EXECUTOR_TOKEN=' "${ce_dir}/.env" 2>/dev/null | cut -d'=' -f2-)
+    fi
+
+    # If not all three provided via env, prompt interactively. Daemon mode is
+    # the primary use case for a remote executor, so default to yes.
+    if [ -z "$daemon_url" ] || [ -z "$daemon_id" ] || [ -z "$daemon_token" ]; then
+        echo ""
+        echo -e "${BOLD}Connect to a runner-agent as a remote executor? (daemon mode)${NC}"
+        echo -e "${CYAN}  Daemon mode — connect to a GRIPHOOK agent over HTTP${NC}"
+        echo -e "${DIM}  The executor calls the agent outbound, so it works behind NAT/firewall.${NC}"
+        echo -e "${DIM}  Get these three values from the agent UI:${NC}"
+        echo -e "${DIM}  Settings → Remote Executors → Add (the token is shown once).${NC}"
+        echo -e "${DIM}  Leave RUNNER_URL blank to skip daemon mode (inbound-only).${NC}"
+        echo ""
+        if [ -n "$daemon_url" ]; then
+            echo -n "  RUNNER_URL (e.g. http://host:8090) [${daemon_url}, blank = skip]: "
         else
-            $SUDO tee "${ce_dir}/.env" > /dev/null << EOF
+            echo -n "  RUNNER_URL (e.g. http://host:8090) [blank = skip]: "
+        fi
+        read -r daemon_url_input < /dev/tty
+        if [ -n "$daemon_url_input" ]; then daemon_url="$daemon_url_input"; fi
+        if [ -n "$daemon_url" ]; then
+            echo -n "  EXECUTOR_ID (from the agent UI) [${daemon_id}]: "
+            read -r daemon_id_input < /dev/tty
+            [ -n "$daemon_id_input" ] && daemon_id="$daemon_id_input"
+            echo -n "  EXECUTOR_TOKEN (from the agent UI, shown once) [${daemon_token}]: "
+            read -r daemon_token_input < /dev/tty
+            [ -n "$daemon_token_input" ] && daemon_token="$daemon_token_input"
+            if [ -z "$daemon_id" ] || [ -z "$daemon_token" ]; then
+                log_warn "Daemon mode needs both EXECUTOR_ID and EXECUTOR_TOKEN; disabling daemon mode."
+                daemon_url=""
+            fi
+        else
+            daemon_url=""
+        fi
+    fi
+
+    local daemon_enabled=0
+    if [ -n "$daemon_url" ] && [ -n "$daemon_id" ] && [ -n "$daemon_token" ]; then
+        daemon_enabled=1
+    fi
+
+    # (Re)write .env with the current config. Values are read back from an
+    # existing .env above, so a re-run preserves whatever the user already chose.
+    if [ "$OS" == "windows" ]; then
+        {
+            printf 'SPRING_APPLICATION_TOKEN=%s\n' "$ce_token"
+            printf 'SERVER_PORT=%s\n' "$CLI_EXECUTOR_PORT"
+            if [ "$daemon_enabled" -eq 1 ]; then
+                printf 'RUNNER_URL=%s\nEXECUTOR_ID=%s\nEXECUTOR_TOKEN=%s\n' "$daemon_url" "$daemon_id" "$daemon_token"
+            fi
+        } > "${ce_dir}/.env"
+    else
+        $SUDO tee "${ce_dir}/.env" > /dev/null << EOF
 SPRING_APPLICATION_TOKEN=${ce_token}
 SERVER_PORT=${CLI_EXECUTOR_PORT}
 EOF
+        if [ "$daemon_enabled" -eq 1 ]; then
+            $SUDO tee -a "${ce_dir}/.env" > /dev/null << EOF
+RUNNER_URL=${daemon_url}
+EXECUTOR_ID=${daemon_id}
+EXECUTOR_TOKEN=${daemon_token}
+EOF
         fi
-        log_success "Created ${ce_dir}/.env"
     fi
+    log_success "Wrote ${ce_dir}/.env"
+    if [ "$daemon_enabled" -eq 1 ]; then
+        log_info "Daemon mode ON — executor will register with ${daemon_url} as id=${daemon_id}"
+    else
+        log_info "Daemon mode OFF — inbound-only (runner-agent must reach this host on port ${CLI_EXECUTOR_PORT})"
+    fi
+
+    # Stash for the service creators + next-steps.
+    CLI_EXECUTOR_DAEMON_URL="$daemon_url"
+    CLI_EXECUTOR_DAEMON_ID="$daemon_id"
+    CLI_EXECUTOR_DAEMON_TOKEN="$daemon_token"
+    CLI_EXECUTOR_DAEMON_ENABLED="$daemon_enabled"
 
     # Create start script
     if [ "$OS" == "windows" ]; then
@@ -981,7 +1084,12 @@ create_cli_executor_service_windows() {
 
     "$nssm_cmd" install cli-executor java -jar "$win_jar"
     "$nssm_cmd" set cli-executor AppDirectory "$win_dir"
-    "$nssm_cmd" set cli-executor AppEnvironmentExtra "SPRING_APPLICATION_TOKEN=${ce_token}" "SERVER_PORT=${CLI_EXECUTOR_PORT}"
+    local env_extra="SPRING_APPLICATION_TOKEN=${ce_token} SERVER_PORT=${CLI_EXECUTOR_PORT}"
+    if [ "${CLI_EXECUTOR_DAEMON_ENABLED:-0}" -eq 1 ]; then
+        env_extra="${env_extra} RUNNER_URL=${CLI_EXECUTOR_DAEMON_URL} EXECUTOR_ID=${CLI_EXECUTOR_DAEMON_ID} EXECUTOR_TOKEN=${CLI_EXECUTOR_DAEMON_TOKEN}"
+    fi
+    # shellcheck disable=SC2086 # intentional word-splitting into nssm args
+    "$nssm_cmd" set cli-executor AppEnvironmentExtra $env_extra
     "$nssm_cmd" set cli-executor Start SERVICE_AUTO_START
     "$nssm_cmd" start cli-executor
     log_success "Created Windows service: cli-executor"
@@ -1352,14 +1460,24 @@ print_next_steps() {
                 echo -e "     ${YELLOW}${CLI_EXECUTOR_DIR_OUT}/start.sh${NC}"
             fi
             echo ""
-            echo -e "  ${CYAN}3.${NC} Health check:"
-            echo -e "     ${YELLOW}curl http://localhost:${CLI_EXECUTOR_PORT}/executor/health${NC}"
-            echo -e "     ${DIM}(expect: OK)${NC}"
-            echo ""
-            echo -e "  ${CYAN}4.${NC} Call it (token in request body, not a header):"
-            echo -e "     ${YELLOW}curl -X POST http://localhost:${CLI_EXECUTOR_PORT}/executor/run \\${NC}"
-            echo -e "       ${YELLOW}-H 'content-type: application/json' \\${NC}"
-            echo -e "       ${YELLOW}-d '{\"commands\":[\"uptime\"],\"token\":\"<your-token>\"}'${NC}"
+            if [ "${CLI_EXECUTOR_DAEMON_ENABLED:-0}" -eq 1 ]; then
+                echo -e "  ${CYAN}3.${NC} Daemon health check (on runner-agent):"
+                echo -e "     ${YELLOW}curl ${CLI_EXECUTOR_DAEMON_URL}/executors -H \"Authorization: Bearer <AGENT_TOKEN>\"${NC}"
+                echo -e "     ${DIM}(look for executor id=${CLI_EXECUTOR_DAEMON_ID} status=ONLINE)${NC}"
+                echo ""
+                echo -e "  ${CYAN}4.${NC} Run a command on this executor (via the agent's tool):"
+                echo -e "     ${DIM}Ask the runner-agent agent: \"run 'uname -a' on executor ${CLI_EXECUTOR_DAEMON_ID}\"${NC}"
+                echo -e "     ${DIM}(the agent invokes the execute_on_executor tool)${NC}"
+            else
+                echo -e "  ${CYAN}3.${NC} Health check:"
+                echo -e "     ${YELLOW}curl http://localhost:${CLI_EXECUTOR_PORT}/executor/health${NC}"
+                echo -e "     ${DIM}(expect: OK)${NC}"
+                echo ""
+                echo -e "  ${CYAN}4.${NC} Call it (token in request body, not a header):"
+                echo -e "     ${YELLOW}curl -X POST http://localhost:${CLI_EXECUTOR_PORT}/executor/run \\${NC}"
+                echo -e "       ${YELLOW}-H 'content-type: application/json' \\${NC}"
+                echo -e "       ${YELLOW}-d '{\"commands\":[\"uptime\"],\"token\":\"<your-token>\"}'${NC}"
+            fi
             echo ""
             echo -e "  ${CYAN}Docs:${NC} https://github.com/${GITHUB_REPO}#cli-executor"
             ;;
@@ -1372,7 +1490,24 @@ print_next_steps() {
     # Show the agent token so the user can copy it (read back from .env.bak so it
     # works even when config was skipped because .env.bak already existed).
     if [ "$INSTALL_METHOD" == "cli-executor" ]; then
-        if [ -n "${CLI_EXECUTOR_TOKEN_OUT:-}" ]; then
+        if [ "${CLI_EXECUTOR_DAEMON_ENABLED:-0}" -eq 1 ]; then
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo -e "${GREEN}      Remote Executor (Daemon Mode)        ${NC}"
+            echo -e "${GREEN}════════════════════════════════════════════${NC}"
+            echo ""
+            echo -e "  ${CYAN}RUNNER_URL:${NC}      ${YELLOW}${CLI_EXECUTOR_DAEMON_URL}${NC}"
+            echo -e "  ${CYAN}EXECUTOR_ID:${NC}    ${YELLOW}${CLI_EXECUTOR_DAEMON_ID}${NC}"
+            echo -e "  ${CYAN}EXECUTOR_TOKEN:${NC} ${YELLOW}${CLI_EXECUTOR_DAEMON_TOKEN}${NC}"
+            echo ""
+            echo -e "  ${DIM}The daemon registers with runner-agent on start + long-polls for${NC}"
+            echo -e "  ${DIM}work. Manage this executor in the runner-agent UI:${NC}"
+            echo -e "  ${DIM}Settings → Remote Executors. The token is shown once at creation${NC}"
+            echo -e "  ${DIM}time; if you lose it, delete + recreate the executor there.${NC}"
+            echo ""
+            echo -e "  ${DIM}Config file: ${CLI_EXECUTOR_DIR_OUT}/.env${NC}"
+            echo -e "  ${DIM}Edit it + restart the service to change runner-agent / executor id.${NC}"
+            echo ""
+        elif [ -n "${CLI_EXECUTOR_TOKEN_OUT:-}" ]; then
             echo -e "${GREEN}════════════════════════════════════════════${NC}"
             echo -e "${GREEN}         Your CLI Executor Token           ${NC}"
             echo -e "${GREEN}════════════════════════════════════════════${NC}"
@@ -1461,6 +1596,18 @@ parse_args() {
                 echo ""
                 echo "Environment variables:"
                 echo "  INSTALL_DIR    Installation directory (default: /opt/griphook)"
+                echo ""
+                echo "cli-executor (--cli-executor) env vars:"
+                echo "  CLI_EXECUTOR_PORT          Listen port (default: 8010)"
+                echo "  CLI_EXECUTOR_TOKEN         Inbound POST /executor/run token (auto-generated if unset)"
+                echo "  CLI_EXECUTOR_RUNNER_URL    Daemon mode: runner-agent URL, e.g. http://host:8090"
+                echo "  CLI_EXECUTOR_EXECUTOR_ID   Daemon mode: executor id from the runner-agent UI"
+                echo "  CLI_EXECUTOR_EXECUTOR_TOKEN Daemon mode: executor token (shown once in the UI)"
+                echo "  CLI_EXECUTOR_INSTALL_DIR   Install directory (default: /opt/cli-executor)"
+                echo ""
+                echo "When RUNNER_URL + EXECUTOR_ID + EXECUTOR_TOKEN are all set, the executor runs"
+                echo "in daemon mode (calls runner-agent outbound — works behind NAT/firewall)."
+                echo "Otherwise it runs inbound-only (runner-agent calls it via POST /executor/run)."
                 echo ""
                 exit 0
                 ;;
