@@ -31,7 +31,6 @@
 .EXAMPLE
     irm https://griphook.dev/install.ps1 | iex
 #>
-
 [CmdletBinding()]
 param(
     [ValidateSet('source')]
@@ -43,7 +42,6 @@ param(
     [switch]$CliExecutor,
     [string]$CliExecutorDir = "${env:ProgramData}\GriphookCliExecutor"
 )
-
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -64,7 +62,6 @@ function Write-Banner {
     Write-Host '  +-------------------------------------------+' -ForegroundColor Cyan
     Write-Host ''
 }
-
 function Write-Info    ([string]$m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Write-Success ([string]$m) { Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Write-Warn    ([string]$m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
@@ -76,7 +73,6 @@ function Test-Admin {
     $principal = New-Object Security.Principal.WindowsPrincipal($id)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
-
 function Assert-Admin {
     if (-not (Test-Admin)) {
         Write-Err 'This installer must be run as Administrator.'
@@ -88,7 +84,6 @@ function Assert-Admin {
     }
     Write-Success 'Running as Administrator'
 }
-
 function Assert-Winget {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Err 'winget is required but not installed.'
@@ -109,13 +104,6 @@ function Update-SessionPath {
 }
 
 # -- Dependency installers --------------------------------------------------
-# Resolve an executable via where.exe (bypasses PowerShell's Get-Command cache,
-# which is stale after winget updates PATH mid-session).
-# where.exe prints "INFO: Could not find files for the given pattern(s)." to
-# stderr on no-match, and with $ErrorActionPreference='Stop' that stderr line
-# triggers a NativeCommandError throw (2>$null does not reliably suppress it).
-# So we: drop EAP to Continue for the call, merge stderr into stdout, skip
-# INFO: banner lines, check $LASTEXITCODE, and Test-Path the candidate.
 function Resolve-OnPath {
     param([string]$Name)
     $prevEap = $ErrorActionPreference
@@ -135,12 +123,10 @@ function Resolve-OnPath {
     }
     return $null
 }
-
 function Get-JavaMajorVersion {
     $java = Resolve-OnPath 'java'
     if (-not $java) { return 0 }
     try {
-        # Java 9+: --version writes to stdout. Fall back to -version (stderr) for older installs.
         $out = & $java --version 2>&1 | Select-Object -First 1
         if (-not $out) {
             $out = & $java -version 2>&1 | Select-Object -First 1
@@ -149,28 +135,23 @@ function Get-JavaMajorVersion {
     } catch { }
     return 0
 }
-
 function Install-Java {
     $current = Get-JavaMajorVersion
     if ($current -ge $RequiredJavaVer) {
         Write-Success "Java $current found (required: $RequiredJavaVer+)"
         return
     }
-
     Write-Info "Installing Microsoft OpenJDK $RequiredJavaVer via winget..."
     winget install --id Microsoft.OpenJDK.21 `
         --silent --accept-package-agreements --accept-source-agreements `
         --scope machine | Out-Null
-
     Update-SessionPath
-
     $current = Get-JavaMajorVersion
     if ($current -lt $RequiredJavaVer) {
         throw "Java install appeared to succeed but 'java --version' still reports ${current}. Open a new terminal and re-run."
     }
     Write-Success "Java $current installed"
 }
-
 function Get-NodeMajorVersion {
     $node = Resolve-OnPath 'node'
     if (-not $node) { return 0 }
@@ -180,28 +161,23 @@ function Get-NodeMajorVersion {
     } catch { }
     return 0
 }
-
 function Install-Node {
     $current = Get-NodeMajorVersion
     if ($current -ge $RequiredNodeVer) {
         Write-Success "Node.js $current found (required: $RequiredNodeVer+)"
         return
     }
-
     Write-Info 'Installing Node.js LTS via winget...'
     winget install --id OpenJS.NodeJS.LTS `
         --silent --accept-package-agreements --accept-source-agreements `
         --scope machine | Out-Null
-
     Update-SessionPath
-
     $current = Get-NodeMajorVersion
     if ($current -lt $RequiredNodeVer) {
         throw "Node.js install appeared to succeed but 'node -v' still reports ${current}. Open a new terminal and re-run."
     }
     Write-Success "Node.js $current installed"
 }
-
 function Install-Git {
     if (Resolve-OnPath 'git') {
         Write-Success 'Git is available'
@@ -211,19 +187,12 @@ function Install-Git {
     winget install --id Git.Git `
         --silent --accept-package-agreements --accept-source-agreements `
         --scope machine | Out-Null
-
     Update-SessionPath
-
     if (-not (Resolve-OnPath 'git')) {
         throw "Git install appeared to succeed but 'git' is still not on PATH. Open a new terminal and re-run."
     }
     Write-Success 'Git installed'
 }
-
-# If the backend launcher (griphook-start.bat) already exists from a previous
-# install, read its -D lines into the script-scope vars so re-runs default
-# to whatever the user already chose. No .env file is used - all config is
-# baked directly into the launcher .bat as -D JVM system properties.
 function Import-CredsFromLauncher {
     param([string]$LauncherPath)
     if (-not (Test-Path $LauncherPath)) { return }
@@ -243,16 +212,13 @@ function Import-CredsFromLauncher {
 # -- Clone + build ----------------------------------------------------------
 function Get-Sources {
     param([string]$Destination)
-
     if (Test-Path $Destination) {
         Write-Info "Cleaning previous source checkout at $Destination"
         Remove-Item -Recurse -Force $Destination
     }
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-
     Write-Info "Cloning $GithubRepo..."
     $repoUrl = "https://github.com/" + $GithubRepo + ".git"
-    # Save + restore EAP so git's stderr progress output doesn't become a terminating error.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -267,10 +233,8 @@ function Get-Sources {
     }
     Write-Success 'Source checkout complete'
 }
-
 function Build-Backend {
     param([string]$SrcDir, [string]$InstallDir)
-
     Write-Info 'Building backend with Gradle (this takes a few minutes)...'
     Push-Location $SrcDir
     $prevEap = $ErrorActionPreference
@@ -283,67 +247,50 @@ function Build-Backend {
         $ErrorActionPreference = $prevEap
         Pop-Location
     }
-
     $jar = Get-ChildItem -Path (Join-Path $SrcDir 'build\libs') -Filter '*.jar' |
            Where-Object { $_.Name -notmatch 'plain' } |
            Select-Object -First 1
     if (-not $jar) { throw 'Backend JAR not found after build' }
-
     $destJar = Join-Path $InstallDir 'griphook-agent.jar'
     Copy-Item -Force $jar.FullName $destJar
     Write-Success "Backend JAR installed: $destJar"
 }
-
 function Build-Frontend {
     param([string]$SrcDir, [string]$InstallDir)
-
     $uiSrc = Join-Path $SrcDir 'ui'
     $uiDest = Join-Path $InstallDir 'ui'
-
     if (Test-Path $uiDest) {
         Remove-Item -Recurse -Force $uiDest
     }
     Write-Info 'Copying UI sources...'
     Copy-Item -Recurse -Force $uiSrc $uiDest
-
     Push-Location $uiDest
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        Write-Info 'Installing npm dependencies...'
-        & cmd.exe /c 'npm install --loglevel=error 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        Write-Info 'Installing npm dependencies (this can take several minutes on first run)...'
+        & cmd.exe /c 'npm install 2>&1'
         $npmExit = $LASTEXITCODE
         if ($npmExit -ne 0) { throw "npm install failed (exit $npmExit)" }
-
-        # Write UI env before build. (Prisma 7 reads prisma.config.ts for the
-        # datasource URL - file:<cwd>/data/runner.db - so .env.local is only
-        # for any code that reads process.env.DATABASE_URL directly.)
         Set-Content -Path (Join-Path $uiDest '.env.local') -Value 'DATABASE_URL="file:./data/runner.db"' -Encoding ASCII
-
-        # SQLite won't create the parent dir; prisma.config.ts points at
-        # ./data/runner.db relative to CWD, so create data/ before db push.
         $dataDir = Join-Path $uiDest 'data'
         New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
         Write-Info 'Generating Prisma client...'
         & cmd.exe /c 'npx --yes prisma generate 2>&1' | Out-Null
         $genExit = $LASTEXITCODE
         if ($genExit -ne 0) { throw "prisma generate failed (exit $genExit)" }
-
         Write-Info 'Applying Prisma schema (db push)...'
-        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        & cmd.exe /c 'npx --yes prisma db push --accept-data-loss 2>&1'
         $pushExit = $LASTEXITCODE
         if ($pushExit -ne 0) { throw "prisma db push failed (exit $pushExit) - database not initialized" }
-
-        Write-Info 'Building Next.js production bundle...'
-        & cmd.exe /c 'npm run build 2>&1' | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        Write-Info 'Building Next.js production bundle (this can take a few minutes)...'
+        & cmd.exe /c 'npm run build 2>&1'
         $buildExit = $LASTEXITCODE
         if ($buildExit -ne 0) { throw "Next.js build failed (exit $buildExit)" }
     } finally {
         $ErrorActionPreference = $prevEap
         Pop-Location
     }
-
     Write-Success 'Frontend built'
 }
 
@@ -353,7 +300,6 @@ function Test-PortInUse {
     $tcpConnections = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
     return ($null -ne $tcpConnections) -and (@($tcpConnections).Count -gt 0)
 }
-
 function Find-FreePort {
     param([int]$StartPort = 8090)
     $port   = $StartPort
@@ -369,22 +315,15 @@ function Find-FreePort {
     Write-Warn "Could not find a free port (tried: $($tried -join ', ')). Using $StartPort."
     return $StartPort
 }
-
 function New-AgentToken {
     $bytes = New-Object byte[] 32
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     return [BitConverter]::ToString($bytes).Replace('-', '').ToLower()
 }
-
-# Prompt for all config (token, apiKey, port, PG creds) into script-scope
-# vars. On re-runs, defaults come from the existing launcher .bat (imported
-# by Import-CredsFromLauncher). On first install, defaults are hardcoded.
 function Prompt-Config {
     param([string]$InstallDir)
-
     $launcher = Join-Path $InstallDir 'griphook-start.bat'
     $existing = Test-Path $launcher
-
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Cyan
     Write-Host '         Quick Configuration                ' -ForegroundColor Cyan
@@ -393,14 +332,12 @@ function Prompt-Config {
         Write-Host '   (Re-run: defaults = current values in griphook-start.bat)' -ForegroundColor DarkGray
     }
     Write-Host ''
-
     Write-Host '1. Google AI API Key ' -NoNewline
     Write-Host '(required for AI chat)' -ForegroundColor Red
     Write-Host '   Get your free key at: https://aistudio.google.com/apikey' -ForegroundColor DarkGray
     $apiKeyDefault = if ($ExistingApiKey) { $ExistingApiKey } else { '' }
     $apiKey = Read-Host "   Enter your Google AI API Key [${apiKeyDefault}]"
     if ([string]::IsNullOrWhiteSpace($apiKey)) { $apiKey = $apiKeyDefault }
-
     Write-Host ''
     Write-Host '2. Agent Token (API authentication)'
     Write-Host '   Press Enter to auto-generate a secure token.' -ForegroundColor DarkGray
@@ -415,7 +352,6 @@ function Prompt-Config {
             Write-Host "   Generated: $($token.Substring(0,16))..." -ForegroundColor Green
         }
     }
-
     Write-Host ''
     Write-Host '3. Server Port (Default: 8090)'
     Write-Host '   If the default is in use, we will auto-bump by +100 until a free port is found.' -ForegroundColor DarkGray
@@ -429,60 +365,32 @@ function Prompt-Config {
         $portInt = $suggestedPort
     }
     $script:ServerPort = "$portInt"
-
-    # Stash for the launcher writer.
     $script:CfgApiKey = $apiKey
     $script:CfgToken  = $token
 }
 
 # -- Service wrappers (WinSW) ------------------------------------------------
-# A single WinSW binary (griphook-win-service.exe) is committed at the repo
-# root + copied into the install dir under two names - one per service - so
-# WinSW's exe+xml-same-basename convention is satisfied for both the backend
-# and the UI without shipping the 18 MB binary twice.
-#
-# Env-var handling: NO .env file is used. All backend config (token, api
-# key, db creds, etc.) is baked directly into griphook-start.bat as
-# `set "X=Y"` lines by Write-BackendLauncher. To change config, edit the
-# .bat + Restart-Service Griphook. The UI launcher sets NODE_ENV/PORT
-# + runs `next start` (Next.js auto-loads ui/.env.local for its own
-# DATABASE_URL).
 function Install-WinSw {
     param([string]$SrcDir, [string]$InstallDir)
-
     $logDir = Join-Path $InstallDir 'logs'
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
     $srcExe = Join-Path $SrcDir 'griphook-win-service.exe'
     if (-not (Test-Path $srcExe)) {
         throw "WinSW exe not found in cloned repo at $srcExe"
     }
-
     foreach ($base in @('griphook-win-service', 'griphook-win-service-ui')) {
         $exeDst = Join-Path $InstallDir "$base.exe"
         $xmlSrc = Join-Path $SrcDir "$base.xml"
         $xmlDst = Join-Path $InstallDir "$base.xml"
         if (-not (Test-Path $xmlSrc)) { throw "WinSW xml not found in cloned repo at $xmlSrc" }
-        # Copy the single source binary to both service names.
         Copy-Item -Force $srcExe $exeDst
         Copy-Item -Force $xmlSrc $xmlDst
     }
     Write-Success "WinSW binaries installed: $InstallDir"
 }
-
-# Generate the backend launcher batch script. All config is passed as -D
-# JVM system properties on the java command line - no .env file, no `set`
-# lines. Spring's relaxed binding resolves -DAGENT_TOKEN / -DSPRING_DATASOURCE_*
-# to the ${VAR:default} placeholders in application.yml. To change config,
-# edit this .bat + Restart-Service Griphook. The java.exe path is baked in
-# at install time (resolved from PATH).
 function Write-BackendLauncher {
     param([string]$InstallDir, [string]$JavaExe)
-
     $tempDir = $env:TEMP
-    # Embedded SQLite: no DB server, no credentials. The DB file lives
-    # under the install dir so it survives service restarts + is easy to
-    # back up. WAL + busy_timeout match application.yml defaults.
     $dataDir = Join-Path $InstallDir 'data'
     New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
     $dsUrl   = "jdbc:sqlite:$dataDir\runner.db?journal_mode=WAL&busy_timeout=5000"
@@ -492,29 +400,24 @@ function Write-BackendLauncher {
         'rem All config passed as -D JVM system properties. Edit this file',
         'rem + Restart-Service Griphook to change config. NO .env file.',
         'rem Values containing spaces/special chars must be double-quoted.',
-        "`"$JavaExe`" -Xmx512m ^",
-        "  -DAGENT_TOKEN=`"$CfgToken`" ^",
-        "  -DGOOGLE_AI_API_KEY=`"$CfgApiKey`" ^",
-        "  -DSERVER_PORT=`"$ServerPort`" ^",
-        "  -DAGENT_WORKING_DIR=`"$tempDir`" ^",
+        ('"' + $JavaExe + '" -Xmx512m ^'),
+        ('  -DAGENT_TOKEN="' + $CfgToken + '" ^'),
+        ('  -DGOOGLE_AI_API_KEY="' + $CfgApiKey + '" ^'),
+        ('  -DSERVER_PORT="' + $ServerPort + '" ^'),
+        ('  -DAGENT_WORKING_DIR="' + $tempDir + '" ^'),
         '  -DAGENT_DEFAULT_SHELL="cmd.exe" ^',
         '  -DAGENT_MAX_CONCURRENT="5" ^',
         '  -DAGENT_ADK_MODEL="gemini-2.0-flash" ^',
         '  -DAGENT_ADK_ENABLED="true" ^',
-        "  -DSPRING_DATASOURCE_URL=`"$dsUrl`" ^",
+        ('  -DSPRING_DATASOURCE_URL="' + $dsUrl + '" ^'),
         '  -jar "%~dp0griphook-agent.jar"'
     )
     $path = Join-Path $InstallDir 'griphook-start.bat'
     Set-Content -Path $path -Value $bat -Encoding ASCII
     Write-Success "Backend launcher written: $path"
 }
-
-# Generate the UI launcher batch script. Next.js auto-loads ui/.env.local
-# from its working dir, so the launcher just sets NODE_ENV + PORT + runs
-# `next start`. The node.exe path is baked in at install time.
 function Write-FrontendLauncher {
     param([string]$InstallDir, [string]$NodeExe)
-
     $bat = @(
         '@echo off',
         'rem GRIPHOOK UI launcher (generated by install.ps1).',
@@ -523,17 +426,15 @@ function Write-FrontendLauncher {
         'set "NODE_ENV=production"',
         'set "PORT=3000"',
         'cd /d "%~dp0ui"',
-        "`"$NodeExe`" `"node_modules\next\dist\bin\next`" start -p 3000",
+        ('"' + $NodeExe + '" "node_modules\next\dist\bin\next" start -p 3000'),
         'endlocal'
     )
     $path = Join-Path $InstallDir 'griphook-start-ui.bat'
     Set-Content -Path $path -Value $bat -Encoding ASCII
     Write-Success "Frontend launcher written: $path"
 }
-
 function Remove-ExistingService {
     param([string]$WinSwExe, [string]$Name)
-
     $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
     if ($null -ne $svc) {
         Write-Info "Removing existing service: $Name"
@@ -542,12 +443,6 @@ function Remove-ExistingService {
         Start-Sleep -Seconds 1
     }
 }
-
-# Stop + delete any existing Griphook services WITHOUT needing the WinSW exe.
-# Called before Install-WinSw so a running service from a previous install
-# can't hold a lock on the exe (which would make Copy-Item fail with
-# "The process cannot access the file ... because it is being used by
-# another process"). Uses Stop-Service + sc.exe delete - both builtin.
 function Stop-ExistingServicesForReinstall {
     foreach ($name in @($BackendServiceName, $FrontendServiceName)) {
         $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -558,7 +453,6 @@ function Stop-ExistingServicesForReinstall {
         } catch {
             # Service may already be stopped; ignore.
         }
-        # Wait for the process to release the lock on the WinSW exe.
         $deadline = (Get-Date).AddSeconds(15)
         while ((Get-Date) -lt $deadline) {
             $s = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -571,30 +465,23 @@ function Stop-ExistingServicesForReinstall {
         Start-Sleep -Seconds 1
     }
 }
-
 function New-BackendService {
     param([string]$InstallDir)
-
     $javaExe = Resolve-OnPath 'java'
     if (-not $javaExe) { throw "java not found on PATH when creating backend service" }
     if (-not (Test-Path (Join-Path $InstallDir 'griphook-agent.jar'))) {
         throw "griphook-agent.jar not found in $InstallDir - did Build-Backend succeed?"
     }
-
     Write-BackendLauncher -InstallDir $InstallDir -JavaExe $javaExe
-
     $winswExe = Join-Path $InstallDir 'griphook-win-service.exe'
     Remove-ExistingService -WinSwExe $winswExe -Name $BackendServiceName
-
     Write-Info "Creating service: $BackendServiceName"
     & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for $BackendServiceName (exit $LASTEXITCODE)" }
     Write-Success "Backend service '$BackendServiceName' created"
 }
-
 function New-FrontendService {
     param([string]$InstallDir)
-
     $uiDir   = Join-Path $InstallDir 'ui'
     $nodeExe = Resolve-OnPath 'node'
     if (-not $nodeExe) { throw "node not found on PATH when creating frontend service" }
@@ -602,18 +489,14 @@ function New-FrontendService {
     if (-not (Test-Path $nextBin)) {
         throw "Next.js binary not found at $nextBin - did 'npm install' succeed?"
     }
-
     Write-FrontendLauncher -InstallDir $InstallDir -NodeExe $nodeExe
-
     $winswExe = Join-Path $InstallDir 'griphook-win-service-ui.exe'
     Remove-ExistingService -WinSwExe $winswExe -Name $FrontendServiceName
-
     Write-Info "Creating service: $FrontendServiceName"
     & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for $FrontendServiceName (exit $LASTEXITCODE)" }
     Write-Success "Frontend service '$FrontendServiceName' created"
 }
-
 function Start-Services {
     Write-Info "Starting $BackendServiceName..."
     Start-Service -Name $BackendServiceName
@@ -630,7 +513,6 @@ function Write-NextSteps {
         [string]$InstallDir,
         [switch]$AgentOnly
     )
-
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Green
     Write-Host '         Installation Complete!             ' -ForegroundColor Green
@@ -690,9 +572,6 @@ function Write-NextSteps {
     Write-Host ''
     Write-Host "  Documentation: https://github.com/$GithubRepo" -ForegroundColor DarkGray
     Write-Host ''
-
-    # Show the agent token so the user can copy it (read back from the
-    # launcher .bat where it was baked in).
     $launcher = Join-Path $InstallDir 'griphook-start.bat'
     if (Test-Path $launcher) {
         $savedToken = $null
@@ -722,19 +601,10 @@ function Write-NextSteps {
 }
 
 # -- CLI Executor (remote command runner) -----------------------------------
-# Separate install path: builds only the cli-executor jar from the same repo,
-# registers it as the GriphookCliExecutor Windows service (WinSW), and
-# configures either daemon mode (calls runner-agent outbound — works behind
-# NAT/firewall) or inbound mode (agent calls this host via POST /executor/run).
-# Mirrors install.sh's cli-executor path.
-
-# Build the cli-executor jar (separate gradle project in cli-executor/).
 function Build-CliExecutor {
     param([string]$SrcDir, [string]$InstallDir)
-
     $ceSrc = Join-Path $SrcDir 'cli-executor'
     if (-not (Test-Path $ceSrc)) { throw "cli-executor source not found at $ceSrc" }
-
     Write-Info 'Building cli-executor with Gradle...'
     Push-Location $ceSrc
     $prevEap = $ErrorActionPreference
@@ -747,24 +617,19 @@ function Build-CliExecutor {
         $ErrorActionPreference = $prevEap
         Pop-Location
     }
-
     $jar = Get-ChildItem -Path (Join-Path $ceSrc 'build\libs') -Filter '*.jar' |
            Where-Object { $_.Name -notmatch 'plain' } |
            Select-Object -First 1
     if (-not $jar) { throw 'cli-executor JAR not found after build' }
-
     $destJar = Join-Path $InstallDir 'cli-executor.jar'
     Copy-Item -Force $jar.FullName $destJar
     Write-Success "cli-executor JAR installed: $destJar"
 }
-
 function New-CliExecutorToken {
     $bytes = New-Object byte[] 24
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     return [BitConverter]::ToString($bytes).Replace('-', '').ToLower()
 }
-
-# Read an existing .env so re-runs default to the user's current values.
 function Import-CliExecutorConfig {
     param([string]$EnvPath)
     if (-not (Test-Path $EnvPath)) { return }
@@ -773,47 +638,37 @@ function Import-CliExecutorConfig {
         elseif ($l -match '^\s*SPRING_APPLICATION_TOKEN=(.*)$') { $script:CeToken = $matches[1].Trim() }
         elseif ($l -match '^\s*RUNNER_URL=(.*)$') { $script:CeRunnerUrl = $matches[1].Trim() }
         elseif ($l -match '^\s*EXECUTOR_ID=(.*)$') { $script:CeExecutorId = $matches[1].Trim() }
-        elseif ($l -match '^\s*EXECUTOR_TOKEN=(.*)$) { $script:CeExecutorToken = $matches[1].Trim() }
+        elseif ($l -match '^\s*EXECUTOR_TOKEN=(.*)$') { $script:CeExecutorToken = $matches[1].Trim() }
     }
 }
-
 function Prompt-CliExecutorConfig {
     param([string]$InstallDir)
-
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Cyan
     Write-Host '      CLI Executor Configuration          ' -ForegroundColor Cyan
     Write-Host '============================================' -ForegroundColor Cyan
     Write-Host ''
-
-    # Daemon mode is the primary use case for a remote executor: it calls
-    # the runner-agent outbound (register + long-poll /work + post /results),
-    # so it works behind NAT/firewall. Ask for the three env vars explicitly.
-    Write-Host '  Daemon mode — connect to a GRIPHOOK agent over HTTP' -ForegroundColor Cyan
+    Write-Host '  Daemon mode - connect to a GRIPHOOK agent over HTTP' -ForegroundColor Cyan
     Write-Host '  The executor calls the agent outbound, so it works behind NAT/firewall.' -ForegroundColor DarkGray
     Write-Host '  Get these three values from the agent UI:' -ForegroundColor DarkGray
     Write-Host '  Settings -> Remote Executors -> Add (the token is shown once).' -ForegroundColor DarkGray
     Write-Host '  Leave RUNNER_URL blank to skip daemon mode (inbound-only).' -ForegroundColor DarkGray
     Write-Host ''
-
     $urlDefault = if ($CeRunnerUrl) { $CeRunnerUrl } else { '' }
     $url = Read-Host "  RUNNER_URL (e.g. http://host:8090) [${urlDefault}, blank = skip]"
     if ([string]::IsNullOrWhiteSpace($url)) { $url = $urlDefault }
     $script:CeRunnerUrl = $url
-
     if ($CeRunnerUrl) {
         $idDefault = if ($CeExecutorId) { $CeExecutorId } else { '' }
         $id = Read-Host "  EXECUTOR_ID (from the agent UI) [${idDefault}]"
         if ([string]::IsNullOrWhiteSpace($id)) { $id = $idDefault }
         $script:CeExecutorId = $id
-
         $tokDef = if ($CeExecutorToken) { $CeExecutorToken } else { '' }
         $etok = Read-Host "  EXECUTOR_TOKEN (from the agent UI, shown once) [${tokDef}]"
         if ([string]::IsNullOrWhiteSpace($etok)) { $etok = $tokDef }
         $script:CeExecutorToken = $etok
-
         if ([string]::IsNullOrWhiteSpace($script:CeExecutorId) -or [string]::IsNullOrWhiteSpace($script:CeExecutorToken)) {
-            Write-Warn 'Daemon mode needs both EXECUTOR_ID and EXECUTOR_TOKEN; disabling daemon mode.'
+            Write-Warn 'Daemon mode needs both EXECUTOR_ID and EXECUTOR_TOKEN, disabling daemon mode.'
             $script:CeRunnerUrl = ''
             $script:CeExecutorId = ''
             $script:CeExecutorToken = ''
@@ -822,17 +677,14 @@ function Prompt-CliExecutorConfig {
         $script:CeExecutorId = ''
         $script:CeExecutorToken = ''
     }
-
     Write-Host ''
-    Write-Host '  Inbound mode (legacy — only needed if the agent calls this host' -ForegroundColor DarkGray
+    Write-Host '  Inbound mode (legacy - only needed if the agent calls this host' -ForegroundColor DarkGray
     Write-Host '  directly via POST /executor/run). Skip with Enter to use defaults.' -ForegroundColor DarkGray
     Write-Host ''
-
     $portDefault = if ($CePort) { $CePort } else { '8010' }
     $port = Read-Host "  SERVER_PORT [${portDefault}]"
     if ([string]::IsNullOrWhiteSpace($port)) { $port = $portDefault }
     $script:CePort = $port
-
     $tokenDefault = if ($CeToken) { $CeToken } else { '' }
     if ($tokenDefault) {
         $tok = Read-Host "  SPRING_APPLICATION_TOKEN (inbound /executor/run auth) [${tokenDefault}]"
@@ -846,7 +698,6 @@ function Prompt-CliExecutorConfig {
     }
     $script:CeToken = $tok
 }
-
 function Write-CliExecutorEnv {
     param([string]$InstallDir)
     $path = Join-Path $InstallDir '.env'
@@ -867,10 +718,6 @@ function Write-CliExecutorEnv {
         Write-Info 'Daemon mode OFF -> inbound-only (agent must reach this host)'
     }
 }
-
-# Launcher batch script. WinSW runs this via cmd.exe; it sources .env into
-# the process environment then launches the jar. Edit .env + Restart-Service
-# GriphookCliExecutor to change config (no .bat regen needed).
 function Write-CliExecutorLauncher {
     param([string]$InstallDir)
     $bat = @(
@@ -886,42 +733,20 @@ function Write-CliExecutorLauncher {
     Set-Content -Path $path -Value $bat -Encoding ASCII
     Write-Success "Launcher written: $path"
 }
-
-# Copy the shared WinSW exe to a cli-executor-named copy + generate its xml.
-# WinSW requires the exe + xml to share a basename.
 function Install-CliExecutorWinSw {
     param([string]$SrcDir, [string]$InstallDir)
-
     $logDir = Join-Path $InstallDir 'logs'
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
     $srcExe = Join-Path $SrcDir 'griphook-win-service.exe'
     if (-not (Test-Path $srcExe)) { throw "WinSW exe not found at $srcExe" }
-
+    $xmlSrc = Join-Path $SrcDir 'cli-executor-win-service.xml'
+    if (-not (Test-Path $xmlSrc)) { throw "WinSW xml not found at $xmlSrc" }
     $exeDst = Join-Path $InstallDir 'griphook-cli-executor.exe'
-    Copy-Item -Force $srcExe $exeDst
-
-    $xml = @(
-        '<service>',
-        '  <id>GriphookCliExecutor</id>',
-        '  <name>Griphook CLI Executor</name>',
-        '  <description>GRIPHOOK remote command runner (cli-executor, daemon mode)</description>',
-        '  <executable>cmd.exe</executable>',
-        '  <arguments>/c "%BASE%\cli-executor-start.bat"</arguments>',
-        '  <workingdirectory>%BASE%</workingdirectory>',
-        '  <logpath>%BASE%\logs</logpath>',
-        '  <log mode="roll-by-size">',
-        '    <sizeThreshold>10240</sizeThreshold>',
-        '    <keepFiles>8</keepFiles>',
-        '  </log>',
-        '  <startmode>Automatic</startmode>',
-        '</service>'
-    )
     $xmlDst = Join-Path $InstallDir 'griphook-cli-executor.xml'
-    Set-Content -Path $xmlDst -Value $xml -Encoding ASCII
+    Copy-Item -Force $srcExe $exeDst
+    Copy-Item -Force $xmlSrc $xmlDst
     Write-Success "WinSW installed: $exeDst"
 }
-
 function Stop-ExistingCliExecutorServiceForReinstall {
     $name = 'GriphookCliExecutor'
     $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -939,14 +764,11 @@ function Stop-ExistingCliExecutorServiceForReinstall {
     & sc.exe delete $name 2>&1 | Out-Null
     Start-Sleep -Seconds 1
 }
-
 function New-CliExecutorService {
     param([string]$InstallDir)
-
     if (-not (Test-Path (Join-Path $InstallDir 'cli-executor.jar'))) {
         throw "cli-executor.jar not found in $InstallDir - did Build-CliExecutor succeed?"
     }
-
     $winswExe = Join-Path $InstallDir 'griphook-cli-executor.exe'
     $svc = Get-Service -Name 'GriphookCliExecutor' -ErrorAction SilentlyContinue
     if ($null -ne $svc) {
@@ -955,22 +777,18 @@ function New-CliExecutorService {
         & $winswExe uninstall 2>&1 | Out-Null
         Start-Sleep -Seconds 1
     }
-
     Write-Info 'Creating service: GriphookCliExecutor'
     & $winswExe install 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     if ($LASTEXITCODE -ne 0) { throw "WinSW install failed for GriphookCliExecutor (exit $LASTEXITCODE)" }
     Write-Success "Service 'GriphookCliExecutor' created"
 }
-
 function Start-CliExecutorService {
     Write-Info 'Starting GriphookCliExecutor...'
     Start-Service -Name 'GriphookCliExecutor'
     Write-Success 'Service started'
 }
-
 function Write-CliExecutorNextSteps {
     param([string]$InstallDir)
-
     Write-Host ''
     Write-Host '============================================' -ForegroundColor Green
     Write-Host '    CLI Executor Installation Complete      ' -ForegroundColor Green
@@ -992,7 +810,6 @@ function Write-CliExecutorNextSteps {
     Write-Host "    notepad $(Join-Path $InstallDir '.env')"
     Write-Host '    Restart-Service GriphookCliExecutor'
     Write-Host ''
-
     if ($CeRunnerUrl) {
         Write-Host '  Mode: ' -NoNewline -ForegroundColor Cyan
         Write-Host 'Daemon (calls runner-agent outbound)' -ForegroundColor Yellow
@@ -1005,7 +822,7 @@ function Write-CliExecutorNextSteps {
         Write-Host $CeExecutorToken -ForegroundColor Yellow
         Write-Host ''
         Write-Host '  Check the executor is ONLINE on the runner-agent:' -ForegroundColor Cyan
-        Write-Host "    curl $CeRunnerUrl/executors -H 'Authorization: Bearer <AGENT_TOKEN>'"
+        Write-Host "    curl $CeRunnerUrl/executors -H 'Authorization: Bearer [AGENT_TOKEN]'"
         Write-Host "  (look for executor id=$CeExecutorId status=ONLINE)" -ForegroundColor DarkGray
         Write-Host ''
         Write-Host '  ============================================' -ForegroundColor Green
@@ -1037,24 +854,18 @@ function Write-CliExecutorNextSteps {
     Write-Host "  Documentation: https://github.com/$GithubRepo" -ForegroundColor DarkGray
     Write-Host ''
 }
-
 function Install-CliExecutor {
     Write-Info 'Installing CLI Executor (remote command runner)...'
-
     Install-Java
     Install-Git
-
     New-Item -ItemType Directory -Force -Path $CliExecutorDir | Out-Null
     $srcDir = Join-Path $CliExecutorDir 'src'
-
     Get-Sources -Destination $srcDir
     Build-CliExecutor -SrcDir $srcDir -InstallDir $CliExecutorDir
-
     Import-CliExecutorConfig -EnvPath (Join-Path $CliExecutorDir '.env')
     Prompt-CliExecutorConfig -InstallDir $CliExecutorDir
     Write-CliExecutorEnv -InstallDir $CliExecutorDir
     Write-CliExecutorLauncher -InstallDir $CliExecutorDir
-
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'
     } else {
@@ -1063,7 +874,6 @@ function Install-CliExecutor {
         New-CliExecutorService -InstallDir $CliExecutorDir
         Start-CliExecutorService
     }
-
     Write-CliExecutorNextSteps -InstallDir $CliExecutorDir
 }
 
@@ -1072,8 +882,6 @@ function Main {
     Write-Banner
     Assert-Admin
     Assert-Winget
-
-    # Top-level product choice. -CliExecutor skips the prompt.
     $installCliExecutor = [bool]$CliExecutor
     if (-not $installCliExecutor) {
         Write-Host ''
@@ -1085,19 +893,15 @@ function Main {
         $ans = Read-Host 'Enter choice [1, 2] (default 1)'
         if ($ans -eq '2') { $installCliExecutor = $true }
     }
-
     if ($installCliExecutor) {
         Install-CliExecutor
         return
     }
-
     Install-Java
     if (-not $SkipUI) { Install-Node }
     Install-Git
-
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     $srcDir = Join-Path $InstallDir 'src'
-
     Get-Sources -Destination $srcDir
     Build-Backend  -SrcDir $srcDir -InstallDir $InstallDir
     if ($SkipUI) {
@@ -1105,18 +909,11 @@ function Main {
     } else {
         Build-Frontend -SrcDir $srcDir -InstallDir $InstallDir
     }
-
-    # Import existing launcher .bat config (if re-run) so prompts default
-    # to the user's current values, then prompt for all config + write
-    # the launcher .bat. No .env file - all config baked into the .bat.
     Import-CredsFromLauncher -LauncherPath (Join-Path $InstallDir 'griphook-start.bat')
     Prompt-Config -InstallDir $InstallDir
-
     if ($SkipServices) {
         Write-Warn 'Skipping service creation (-SkipServices set)'
     } else {
-        # Stop + delete any existing Griphook services BEFORE copying the
-        # WinSW exes, so a running service can't lock the file.
         Stop-ExistingServicesForReinstall
         Install-WinSw -SrcDir $srcDir -InstallDir $InstallDir
         New-BackendService  -InstallDir $InstallDir
@@ -1125,23 +922,14 @@ function Main {
         }
         Start-Services
     }
-
     Write-NextSteps -InstallDir $InstallDir -AgentOnly:$SkipUI
 }
-
-# Keep the window open so the user can read/copy the token + next steps.
-# install.ps1 prints the agent token at the very end of Write-NextSteps;
-# without this pause the window closes immediately when run via the
-# `irm | iex` one-liner (or via install.bat, where the child PowerShell
-# process exits before install.bat's own pause fires). Skipped with
-# -NoPause for CI / automation.
 function Wait-BeforeExit {
     if ($NoPause) { return }
     Write-Host ''
     Write-Host 'Press Enter to exit...' -ForegroundColor DarkGray
     try { [void](Read-Host) } catch { }
 }
-
 try {
     Main
     Wait-BeforeExit
