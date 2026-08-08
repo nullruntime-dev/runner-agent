@@ -1,0 +1,14 @@
+<service>
+  <id>GriphookCliExecutor</id>
+  <name>Griphook CLI Executor</name>
+  <description>GRIPHOOK remote command runner (cli-executor, daemon mode)</description>
+  <executable>cmd.exe</executable>
+  <arguments>/c "%BASE%\cli-executor-start.bat"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <startmode>Automatic</startmode>
+</service>
